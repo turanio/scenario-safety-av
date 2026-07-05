@@ -1,0 +1,3 @@
+planner,predictor,first_intervention_step,first_intervention_time,max_braking,mean_acceleration,average_ego_speed,final_ego_x,minimum_logged_distance
+standard,constant_velocity,6,1.2,-1.0,-0.4,8.599999999999998,49.84,2.335294
+uncertainty_aware_conservative,synthetic_multimodal,0,0.0,-2.0,-1.0,5.6,32.2,3.780212

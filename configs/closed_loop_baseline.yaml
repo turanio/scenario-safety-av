@@ -1,0 +1,19 @@
+experiment_name: closed_loop_baseline
+predictor:
+  name: constant_velocity
+planner:
+  name: standard
+  near_miss_threshold: 3.0
+  collision_threshold: 1.0
+  ttc_threshold: 2.0
+  gentle_brake: -1.0
+  hard_brake: -3.0
+outputs:
+  logs_dir: results/logs
+  metrics_dir: results/metrics
+  summary_file: results/metrics/closed_loop_baseline_summary.csv
+scenarios:
+  - safe_following
+  - near_miss_lane_change
+  - collision_risk_cut_in
+  - no_interaction

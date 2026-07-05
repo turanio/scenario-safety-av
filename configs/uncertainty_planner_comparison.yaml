@@ -1,0 +1,24 @@
+experiment_name: uncertainty_planner_comparison
+scenarios:
+  - name: ambiguous_cut_in
+    description: Most likely future keeps lane, lower-probability future cuts into ego lane.
+  - name: delayed_cut_in
+    description: Target begins in adjacent lane, then cuts into ego lane after a short delay.
+predictor_planner_pairs:
+  - planner: standard
+    predictor: constant_velocity
+  - planner: uncertainty_aware_conservative
+    predictor: synthetic_multimodal
+synthetic_multimodal_predictor:
+  probabilities:
+    keep_lane: 0.6
+    cut_in: 0.3
+    slow_down: 0.1
+planner:
+  conservative_uncertainty:
+    safety_distance: 3.0
+    braking_acceleration: -2.0
+outputs:
+  logs_dir: results/logs
+  metrics_dir: results/metrics
+  summary_file: results/metrics/uncertainty_planner_comparison_summary.csv

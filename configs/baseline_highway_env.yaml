@@ -1,0 +1,8 @@
+experiment_name: baseline_highway_env_placeholder
+simulator:
+  name: highway_env
+  env_id: highway-v0
+  enabled: false
+notes:
+  - highway-env is optional for the initial baseline tests.
+  - Enable this only after installing the optional simulator dependencies.

@@ -1,0 +1,5 @@
+experiment_group,scenario,system,predictor,prediction_modes,min_distance,near_miss,collision,intervention_count,first_intervention_time,interpretation
+Planner comparison,Collision-risk cut-in,Naive,Constant Velocity,,0.203961,True,True,0,,No intervention; collision occurs in the dangerous cut-in case.
+Planner comparison,Collision-risk cut-in,Standard,Constant Velocity,,4.434276,False,False,7,,Reactive braking avoids collision and improves the safety margin.
+Uncertainty comparison,Delayed cut-in,Standard,Constant Velocity,1,2.335294,True,False,12,1.2,Single-future planning reacts after the delayed cut-in becomes visible and still produces a near miss.
+Uncertainty comparison,Delayed cut-in,Uncertainty-aware,Synthetic Multimodal,3,3.780212,False,False,15,0.0,"Synthetic multimodal planning considers the plausible cut-in earlier, avoids the near miss, and keeps a larger margin."

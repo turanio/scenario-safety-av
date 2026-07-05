@@ -1,0 +1,20 @@
+experiment_name: planner_comparison
+predictor:
+  name: constant_velocity
+planners:
+  - name: naive
+    behavior: maintain_speed
+  - name: standard
+    behavior: brake_on_predicted_distance_or_ttc_risk
+  - name: conservative_uncertainty
+    enabled: false
+    behavior: placeholder_for_future_uncertainty_aware_planning
+outputs:
+  logs_dir: results/logs
+  metrics_dir: results/metrics
+  summary_file: results/metrics/planner_comparison_summary.csv
+scenarios:
+  - safe_following
+  - near_miss_lane_change
+  - collision_risk_cut_in
+  - no_interaction

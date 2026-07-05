@@ -1,0 +1,7 @@
+experiment_name: carla_placeholder
+simulator:
+  name: carla
+  enabled: false
+notes:
+  - CARLA is reserved for later final validation.
+  - The baseline package must run without CARLA installed.

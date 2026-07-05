@@ -1,0 +1,9 @@
+scenario,planner,predictor,min_distance,near_miss,collision,intervention_count,success
+safe_following,naive,constant_velocity,30.0,False,False,0,True
+near_miss_lane_change,naive,constant_velocity,1.601125,True,False,0,True
+collision_risk_cut_in,naive,constant_velocity,0.203961,True,True,0,False
+no_interaction,naive,constant_velocity,15.0,False,False,0,True
+safe_following,standard,constant_velocity,30.0,False,False,0,True
+near_miss_lane_change,standard,constant_velocity,6.504153,False,False,5,True
+collision_risk_cut_in,standard,constant_velocity,4.434276,False,False,7,True
+no_interaction,standard,constant_velocity,15.0,False,False,0,True

@@ -1,0 +1,14 @@
+experiment_name: baseline_constant_velocity_synthetic
+scenario:
+  name: synthetic_lane_change
+  dt: 0.2
+  max_steps: 50
+predictor:
+  name: constant_velocity
+  horizon_steps: 30
+metrics:
+  collision_threshold: 1.0
+  near_miss_threshold: 3.0
+outputs:
+  metrics_dir: results/metrics
+  figures_dir: results/figures

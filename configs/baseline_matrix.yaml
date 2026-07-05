@@ -1,0 +1,62 @@
+experiment_name: baseline_constant_velocity_matrix
+predictor:
+  name: constant_velocity
+metrics:
+  collision_threshold: 1.0
+  near_miss_threshold: 3.0
+outputs:
+  metrics_dir: results/metrics
+  summary_file: results/metrics/baseline_matrix_summary.csv
+scenarios:
+  - name: safe_following
+    dt: 0.2
+    horizon_steps: 30
+    ego:
+      x: 0.0
+      y: 0.0
+      vx: 8.0
+      vy: 0.0
+    target:
+      x: 30.0
+      y: 0.0
+      vx: 8.5
+      vy: 0.0
+  - name: near_miss_lane_change
+    dt: 0.2
+    horizon_steps: 30
+    ego:
+      x: 0.0
+      y: 0.0
+      vx: 10.0
+      vy: 0.0
+    target:
+      x: 16.0
+      y: 3.5
+      vx: 7.5
+      vy: -0.7
+  - name: collision_risk_cut_in
+    dt: 0.2
+    horizon_steps: 30
+    ego:
+      x: 0.0
+      y: 0.0
+      vx: 10.0
+      vy: 0.0
+    target:
+      x: 10.0
+      y: 2.0
+      vx: 7.0
+      vy: -0.6
+  - name: no_interaction
+    dt: 0.2
+    horizon_steps: 30
+    ego:
+      x: 0.0
+      y: 0.0
+      vx: 8.0
+      vy: 0.0
+    target:
+      x: 0.0
+      y: 15.0
+      vx: 8.0
+      vy: 0.0

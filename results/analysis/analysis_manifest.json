@@ -1,0 +1,16 @@
+{
+  "tables": {
+    "planner_comparison_table": "/home/turan/ucl/scenario-safety-av/results/tables/planner_comparison_table.csv",
+    "uncertainty_comparison_table": "/home/turan/ucl/scenario-safety-av/results/tables/uncertainty_comparison_table.csv",
+    "delayed_cut_in_derived_metrics": "/home/turan/ucl/scenario-safety-av/results/tables/delayed_cut_in_derived_metrics.csv",
+    "key_findings_table": "/home/turan/ucl/scenario-safety-av/results/tables/key_findings_table.csv"
+  },
+  "figures": {
+    "planner_comparison_min_distance": "/home/turan/ucl/scenario-safety-av/results/figures/planner_comparison_min_distance.png",
+    "planner_comparison_interventions": "/home/turan/ucl/scenario-safety-av/results/figures/planner_comparison_interventions.png",
+    "uncertainty_comparison_min_distance": "/home/turan/ucl/scenario-safety-av/results/figures/uncertainty_comparison_min_distance.png",
+    "delayed_cut_in_distance_over_time": "/home/turan/ucl/scenario-safety-av/results/figures/delayed_cut_in_distance_over_time.png",
+    "delayed_cut_in_action_over_time": "/home/turan/ucl/scenario-safety-av/results/figures/delayed_cut_in_action_over_time.png"
+  },
+  "summary": "/home/turan/ucl/scenario-safety-av/docs/results_summary.md"
+}
