@@ -6,12 +6,19 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
+from av_safety_eval.analysis.safety_distances import (
+    compute_center_distances,
+    compute_envelope_adjusted_distances,
+    summarize_distance_series,
+)
+
 
 SELECTED_SCENARIOS = (
     {
         "scenario_id": "001749f1-bc1c-47fb-a13f-9ab1f2c050a8",
         "scenario_type": "Hidden risk",
         "figure_name": "distance_over_time_hidden_risk_001749.png",
+        "adjusted_figure_name": "adjusted_distance_over_time_hidden_risk_001749.png",
         "interpretation": (
             "Multimodal prediction exposes possible lower-probability risk, "
             "but ground truth remains safe."
@@ -20,11 +27,19 @@ SELECTED_SCENARIOS = (
             "The top-1 planner does not brake, while the conservative multimodal "
             "planner brakes for a lower-probability risk; ground truth remains above 3.0 m."
         ),
+        "envelope_interpretation": (
+            "All three adjusted minima are negative under the circular-radius screen; "
+            "the worst-case mode retains a substantially smaller margin than top-1 and "
+            "ground truth, without establishing a collision."
+        ),
     },
     {
         "scenario_id": "0091bad9-e7b2-4c07-aa12-6b5fd03c63d2",
         "scenario_type": "High-confidence close interaction",
         "figure_name": "distance_over_time_high_confidence_close_0091bad.png",
+        "adjusted_figure_name": (
+            "adjusted_distance_over_time_high_confidence_close_0091bad.png"
+        ),
         "interpretation": (
             "Top-1, worst-case multimodal, and ground-truth distances consistently "
             "identify a close interaction above the 3.0 m threshold."
@@ -33,11 +48,19 @@ SELECTED_SCENARIOS = (
             "Neither planner brakes because both predicted minima remain above 3.0 m; "
             "top-1, worst-case, and ground truth still show a consistent close interaction."
         ),
+        "envelope_interpretation": (
+            "Top-1, worst-case, and ground-truth adjusted minima are negative and closely "
+            "aligned, supporting the consistent close-interaction interpretation under "
+            "the circular-radius screen."
+        ),
     },
     {
         "scenario_id": "00351569-255c-433e-b97b-e2a844d1b6e0",
         "scenario_type": "Real near-miss",
         "figure_name": "distance_over_time_real_near_miss_003515.png",
+        "adjusted_figure_name": (
+            "adjusted_distance_over_time_real_near_miss_003515.png"
+        ),
         "interpretation": (
             "Strongest real near-miss example: ground truth, top-1, and worst-case "
             "multimodal distances are all below the 3.0 m near-miss threshold."
@@ -45,6 +68,11 @@ SELECTED_SCENARIOS = (
         "planner_interpretation": (
             "Both planners brake, and ground truth also falls below 3.0 m, making "
             "this the strongest real near-miss example in the batch."
+        ),
+        "envelope_interpretation": (
+            "All three adjusted minima are negative under the circular-radius screen, "
+            "supporting the robustness of the point-distance near-miss interpretation "
+            "without confirming a collision."
         ),
     },
 )
@@ -68,6 +96,23 @@ PLANNER_FIELDS = (
     "ground_truth_min_distance",
     "top1_planner_action",
     "multimodal_planner_action",
+    "interpretation",
+)
+
+ENVELOPE_FIELDS = (
+    "scenario_id",
+    "scenario_type",
+    "top1_center_min_distance",
+    "worst_case_center_min_distance",
+    "ground_truth_center_min_distance",
+    "top1_adjusted_min_distance",
+    "worst_case_adjusted_min_distance",
+    "ground_truth_adjusted_min_distance",
+    "top1_circular_overlap_screen",
+    "worst_case_circular_overlap_screen",
+    "ground_truth_circular_overlap_screen",
+    "ego_radius_m",
+    "target_radius_m",
     "interpretation",
 )
 
@@ -101,8 +146,17 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=Path("results/qcnet_batch/qcnet_planner_decision_comparison.csv"),
     )
+    parser.add_argument(
+        "--envelope-summary-csv",
+        type=Path,
+        default=Path(
+            "results/qcnet_batch/qcnet_selected_scenarios_envelope_summary.csv"
+        ),
+    )
     parser.add_argument("--near-miss-threshold", type=float, default=3.0)
     parser.add_argument("--collision-threshold", type=float, default=1.0)
+    parser.add_argument("--ego-radius-m", type=float, default=2.25)
+    parser.add_argument("--target-radius-m", type=float, default=2.25)
     return parser.parse_args()
 
 
@@ -135,9 +189,7 @@ def valid_mask(data: np.lib.npyio.NpzFile, horizon: int) -> np.ndarray:
 def masked_distances(
     trajectory: np.ndarray, ego_future: np.ndarray, mask: np.ndarray
 ) -> np.ndarray:
-    distances = np.linalg.norm(trajectory - ego_future, axis=-1).astype(float)
-    distances[~mask] = np.nan
-    return distances
+    return compute_center_distances(ego_future, trajectory, mask)
 
 
 def prepare_distance_series(artifact_path: Path) -> dict:
@@ -271,8 +323,154 @@ def plot_scenario(
     plt.close(fig)
 
 
+def adjusted_distance_series(
+    center_series: dict, ego_radius_m: float, target_radius_m: float
+) -> dict:
+    return {
+        name: compute_envelope_adjusted_distances(
+            center_series[name],
+            ego_radius_m=ego_radius_m,
+            target_radius_m=target_radius_m,
+        )
+        for name in ("top1", "worst_case", "ground_truth")
+    }
+
+
+def plot_adjusted_scenario(
+    metadata: dict,
+    ranking_row: dict,
+    center_series: dict,
+    adjusted_series: dict,
+    output_path: Path,
+    ego_radius_m: float,
+    target_radius_m: float,
+) -> None:
+    time = center_series["time"]
+    top1_color = "#1f4e79"
+    worst_color = "#b22222"
+    ground_truth_color = "#2e7d32"
+
+    fig, ax = plt.subplots(figsize=(9.0, 5.5))
+    ax.plot(
+        time,
+        adjusted_series["top1"],
+        color=top1_color,
+        linewidth=2.2,
+        label=(
+            f"Top-1 adjusted distance, mode {center_series['top1_mode']} "
+            f"(p={float(ranking_row['top1_probability']):.3f})"
+        ),
+    )
+    ax.plot(
+        time,
+        adjusted_series["worst_case"],
+        color=worst_color,
+        linewidth=2.2,
+        linestyle="--",
+        label=f"Worst-case adjusted distance, mode {center_series['worst_case_mode']}",
+    )
+    ax.plot(
+        time,
+        adjusted_series["ground_truth"],
+        color=ground_truth_color,
+        linewidth=2.2,
+        linestyle="-.",
+        label="Ground-truth adjusted distance",
+    )
+    ax.axhline(
+        0.0,
+        color="#4b5563",
+        linewidth=1.6,
+        linestyle=":",
+        label="Approximate envelope overlap threshold (0.0 m)",
+    )
+
+    mark_minimum(ax, time, adjusted_series["top1"], top1_color)
+    mark_minimum(ax, time, adjusted_series["worst_case"], worst_color)
+    mark_minimum(ax, time, adjusted_series["ground_truth"], ground_truth_color)
+    ax.set_title(
+        f"Approximate envelope-adjusted distance: {metadata['scenario_type']}\n"
+        f"AV2 scenario {metadata['scenario_id']} | circular radii "
+        f"{ego_radius_m:.2f} m + {target_radius_m:.2f} m"
+    )
+    ax.set_xlabel("Future time (s)")
+    ax.set_ylabel("Envelope-adjusted distance (m)")
+    ax.set_xlim(float(time[0]), float(time[-1]))
+    ax.grid(True, alpha=0.25)
+    ax.legend(loc="best", fontsize=8.2, frameon=True)
+    fig.text(
+        0.5,
+        0.015,
+        "Circular-radius screening approximation only; negative values do not confirm collision geometry.",
+        ha="center",
+        fontsize=8,
+        color="#4b5563",
+    )
+    fig.tight_layout(rect=(0, 0.035, 1, 1))
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=300, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+
+
 def rounded(value: object) -> float:
     return round(float(value), 6)
+
+
+def bool_text(value: bool) -> str:
+    return "true" if value else "false"
+
+
+def envelope_summary_row(
+    metadata: dict,
+    center_series: dict,
+    adjusted_series: dict,
+    ego_radius_m: float,
+    target_radius_m: float,
+) -> dict:
+    center_summaries = {
+        name: summarize_distance_series(center_series[name])
+        for name in ("top1", "worst_case", "ground_truth")
+    }
+    adjusted_summaries = {
+        name: summarize_distance_series(adjusted_series[name])
+        for name in ("top1", "worst_case", "ground_truth")
+    }
+    return {
+        "scenario_id": metadata["scenario_id"],
+        "scenario_type": metadata["scenario_type"],
+        "top1_center_min_distance": rounded(center_summaries["top1"]["min_distance"]),
+        "worst_case_center_min_distance": rounded(
+            center_summaries["worst_case"]["min_distance"]
+        ),
+        "ground_truth_center_min_distance": rounded(
+            center_summaries["ground_truth"]["min_distance"]
+        ),
+        "top1_adjusted_min_distance": rounded(
+            adjusted_summaries["top1"]["min_distance"]
+        ),
+        "worst_case_adjusted_min_distance": rounded(
+            adjusted_summaries["worst_case"]["min_distance"]
+        ),
+        "ground_truth_adjusted_min_distance": rounded(
+            adjusted_summaries["ground_truth"]["min_distance"]
+        ),
+        "top1_circular_overlap_screen": bool_text(
+            adjusted_summaries["top1"]["below_collision_screening_threshold"]
+        ),
+        "worst_case_circular_overlap_screen": bool_text(
+            adjusted_summaries["worst_case"][
+                "below_collision_screening_threshold"
+            ]
+        ),
+        "ground_truth_circular_overlap_screen": bool_text(
+            adjusted_summaries["ground_truth"][
+                "below_collision_screening_threshold"
+            ]
+        ),
+        "ego_radius_m": rounded(ego_radius_m),
+        "target_radius_m": rounded(target_radius_m),
+        "interpretation": metadata["envelope_interpretation"],
+    }
 
 
 def write_csv(path: Path, fields: tuple[str, ...], rows: list[dict]) -> None:
@@ -288,6 +486,7 @@ def main() -> None:
     selected = load_selected_rows(args.ranking_json)
     summary_rows = []
     planner_rows = []
+    envelope_rows = []
 
     for metadata, ranking_row in selected:
         scenario_id = metadata["scenario_id"]
@@ -308,6 +507,32 @@ def main() -> None:
             args.collision_threshold,
         )
         print(f"Created {figure_path}")
+
+        adjusted = adjusted_distance_series(
+            series,
+            ego_radius_m=args.ego_radius_m,
+            target_radius_m=args.target_radius_m,
+        )
+        adjusted_figure_path = args.figure_dir / metadata["adjusted_figure_name"]
+        plot_adjusted_scenario(
+            metadata,
+            ranking_row,
+            series,
+            adjusted,
+            adjusted_figure_path,
+            ego_radius_m=args.ego_radius_m,
+            target_radius_m=args.target_radius_m,
+        )
+        print(f"Created {adjusted_figure_path}")
+        envelope_rows.append(
+            envelope_summary_row(
+                metadata,
+                series,
+                adjusted,
+                ego_radius_m=args.ego_radius_m,
+                target_radius_m=args.target_radius_m,
+            )
+        )
 
         summary_rows.append(
             {
@@ -341,8 +566,10 @@ def main() -> None:
 
     write_csv(args.summary_csv, SUMMARY_FIELDS, summary_rows)
     write_csv(args.planner_csv, PLANNER_FIELDS, planner_rows)
+    write_csv(args.envelope_summary_csv, ENVELOPE_FIELDS, envelope_rows)
     print(f"Created {args.summary_csv}")
     print(f"Created {args.planner_csv}")
+    print(f"Created {args.envelope_summary_csv}")
 
 
 if __name__ == "__main__":

@@ -51,6 +51,24 @@ This is the strongest real near-miss example in the selected batch because groun
 
 Scenario `0058ed53-93bf-42a7-9bba-6df3f6ce20f5` remains available as an appendix or sensitivity example of a large top-1 versus multimodal gap. It was removed from the headline set because its strongest risky point occurs at the final horizon timestep, making the sub-meter worst-case point distance more vulnerable to endpoint effects. Its existing figures and metrics have been retained. Scenario `0091bad` was selected instead because its close interaction occurs earlier and is more consistent across top-1, worst-case multimodal, and ground-truth trajectories.
 
+## Approximate actor-envelope distance
+
+The center-distance analysis is retained as the primary metric, but it does not account for actor size. As a robustness check, an approximate envelope-adjusted distance subtracts a circular radius for each actor from every center distance:
+
+`adjusted_distance = center_distance - ego_radius - target_radius`
+
+The screening calculation uses a 2.25 m radius for ego and a 2.25 m radius for the target, for a combined adjustment of 4.5 m. A negative adjusted value means the two assumed circles overlap at that timestep. It does not establish vehicle contact or a collision: the approximation omits oriented vehicle length and width, heading, shape, and exact footprint intersection.
+
+Because the circular radius is intentionally conservative, the binary circular-overlap screen is used only as a coarse screening indicator; the main interpretation comes from the relative ordering between top-1, worst-case, and ground truth.
+
+| Scenario | Top-1 adjusted min (m) | Worst-case adjusted min (m) | Ground-truth adjusted min (m) | Circular overlap screen |
+|---|---:|---:|---:|---|
+| `001749` | -1.183 | -4.052 | -1.094 | All three negative |
+| `0091bad` | -1.319 | -1.364 | -1.272 | All three negative |
+| `003515` | -1.903 | -2.455 | -2.338 | All three negative |
+
+For `001749`, all three series become negative under the circular assumption, while the worst-case mode remains substantially more negative than top-1 and ground truth. The multimodal margin gap therefore persists, although the circular screen is too coarse to determine physical contact. For `0091bad`, the three adjusted minima remain closely aligned, supporting the interpretation of a consistent close interaction. For `003515`, all three adjusted minima are negative, so the near-miss interpretation remains robust to this simple size adjustment. These results are screening evidence only and do not convert the open-loop analysis into collision checking or closed-loop safety evaluation.
+
 ## Top-1 and Multimodal Planner Decisions
 
 The illustrative planner rule brakes only when its input minimum distance is below 3.0 m. For scenario 001749, the top-1 planner does not brake while the conservative multimodal planner brakes. For scenario 0091bad, neither planner brakes because both predicted minima remain above 3.0 m, although top-1, worst-case multimodal, and ground truth all identify a close interaction near the threshold. Both planners brake for scenario 003515.
@@ -61,7 +79,8 @@ The selected cases motivate uncertainty-aware planning by showing both disagreem
 
 - The analysis is open loop; planner actions do not affect future ego or target motion.
 - The 50 scenarios are a subset of AV2 validation data and are not a representative safety benchmark.
-- Distance is measured between trajectory points and does not account for actor dimensions, orientation, or vehicle-footprint overlap.
+- The primary metric measures trajectory-center points; the supplementary circular-envelope screen approximates actor size but not oriented vehicle geometry.
+- The 2.25 m radii are fixed assumptions, so adjusted results are sensitive to the chosen radius and may be conservative for some actors.
 - Each artifact evaluates one focal target actor against the recorded ego trajectory rather than jointly reasoning over every road user.
 - Worst-case mode selection ignores probability magnitude after the modes have been generated.
 - The 3.0 m and 1.0 m thresholds are simple point-distance conventions, not validated universal safety definitions.
@@ -69,16 +88,20 @@ The selected cases motivate uncertainty-aware planning by showing both disagreem
 
 ## Next Steps
 
-The selected and candidate trajectories have now been inspected with AV2 map context. The analysis can next be expanded to a larger, documented AV2 sample and augmented with actor-envelope distances and probability-aware risk measures. A later closed-loop phase should connect prediction-derived risk to a controller in CARLA or another simulator, measure the consequences of intervention, and report safety and conservatism together. Those future results must remain separate from the open-loop evidence reported here.
+The selected and candidate trajectories have now been inspected with AV2 map context and a circular actor-envelope screen. The analysis can next be expanded to a larger, documented AV2 sample and upgraded to oriented vehicle-footprint geometry and probability-aware risk measures. A later closed-loop phase should connect prediction-derived risk to a controller in CARLA or another simulator, measure the consequences of intervention, and report safety and conservatism together. Those future results must remain separate from the open-loop evidence reported here.
 
 ## Generated Outputs
 
 - `results/qcnet_batch/figures/distance_over_time_hidden_risk_001749.png`
 - `results/qcnet_batch/figures/distance_over_time_high_confidence_close_0091bad.png`
 - `results/qcnet_batch/figures/distance_over_time_real_near_miss_003515.png`
+- `results/qcnet_batch/figures/adjusted_distance_over_time_hidden_risk_001749.png`
+- `results/qcnet_batch/figures/adjusted_distance_over_time_high_confidence_close_0091bad.png`
+- `results/qcnet_batch/figures/adjusted_distance_over_time_real_near_miss_003515.png`
 - `results/qcnet_batch/scenario_validation/`
 - `results/qcnet_batch/scenario_validation_candidates/`
 - `results/qcnet_batch/qcnet_selected_scenarios_summary.csv`
+- `results/qcnet_batch/qcnet_selected_scenarios_envelope_summary.csv`
 - `results/qcnet_batch/qcnet_planner_decision_comparison.csv`
 
 Retained appendix/sensitivity output:
