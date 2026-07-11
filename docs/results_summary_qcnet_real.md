@@ -75,6 +75,14 @@ The illustrative planner rule brakes only when its input minimum distance is bel
 
 The selected cases motivate uncertainty-aware planning by showing both disagreement across plausible modes and agreement around a close interaction. They do not prove that uncertainty-aware planning improves safety. The analysis does not simulate the effects or costs of intervention, and probability calibration, mode plausibility, and the trade-off between risk sensitivity and unnecessary braking remain open questions.
 
+## SafeIO-style safety filter comparison
+
+A lightweight SafeIO-style comparison evaluates three prediction-to-planning interfaces: the highest-probability mode only, the worst case across all modes, and a probability-aware filter retaining modes with `p >= 0.05`. These remain open-loop threshold decisions over center-distance trajectories, not simulated braking responses or a full SafeIO implementation.
+
+For `001749`, top-1 returns `NO_BRAKE`, while worst-case returns `BRAKE` because mode 5 reaches 0.448 m. That mode has probability `p=0.024045`, so the probability-aware filter excludes it and returns `NO_BRAKE`; its closest retained mode remains at 3.257 m. For `0091bad`, all three filters return `NO_BRAKE`. For `003515`, all three return `BRAKE`, and the probability-aware decision is supported by retained mode 5 (`p=0.176845`) rather than the extremely low-probability worst-case mode.
+
+The comparison shows how probability-aware filtering reduces sensitivity to extremely low-probability modes relative to worst-case filtering. It evaluates decision sensitivity to multimodal prediction uncertainty and motivates closed-loop validation, but it does not prove safety improvement, collision avoidance, or the consequences of either braking or not braking.
+
 ## Limitations
 
 - The analysis is open loop; planner actions do not affect future ego or target motion.
@@ -88,7 +96,7 @@ The selected cases motivate uncertainty-aware planning by showing both disagreem
 
 ## Next Steps
 
-The selected and candidate trajectories have now been inspected with AV2 map context and a circular actor-envelope screen. The analysis can next be expanded to a larger, documented AV2 sample and upgraded to oriented vehicle-footprint geometry and probability-aware risk measures. A later closed-loop phase should connect prediction-derived risk to a controller in CARLA or another simulator, measure the consequences of intervention, and report safety and conservatism together. Those future results must remain separate from the open-loop evidence reported here.
+The selected and candidate trajectories have now been inspected with AV2 map context and a circular actor-envelope screen. The analysis can next be expanded to a larger, documented AV2 sample with probability-threshold sensitivity sweeps and, later, upgraded to oriented vehicle-footprint geometry. A later closed-loop phase should connect prediction-derived risk to a controller in CARLA or another simulator, measure the consequences of intervention, and report safety and conservatism together. Those future results must remain separate from the open-loop evidence reported here.
 
 ## Generated Outputs
 
@@ -103,6 +111,8 @@ The selected and candidate trajectories have now been inspected with AV2 map con
 - `results/qcnet_batch/qcnet_selected_scenarios_summary.csv`
 - `results/qcnet_batch/qcnet_selected_scenarios_envelope_summary.csv`
 - `results/qcnet_batch/qcnet_planner_decision_comparison.csv`
+- `results/qcnet_batch/qcnet_safety_filter_comparison.csv`
+- `results/qcnet_batch/qcnet_safety_filter_summary.csv`
 
 Retained appendix/sensitivity output:
 
