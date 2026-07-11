@@ -7,7 +7,7 @@ from av_safety_eval.predictors.base import TrajectoryPredictor
 
 
 class DiffusionPredictorPlaceholder(TrajectoryPredictor):
-    """Explicit boundary for later cVMD/cVMDx integration."""
+    """Generic boundary for later diffusion-based predictor integration."""
 
     def predict(
         self,
@@ -17,5 +17,6 @@ class DiffusionPredictorPlaceholder(TrajectoryPredictor):
     ) -> PredictionSet:
         raise NotImplementedError(
             "Diffusion prediction is not implemented in the baseline setup. "
-            "Validate cVMD/cVMDx separately before adding this integration."
+            "Validate cVMD/cVMDx separately before adding this integration. "
+            "Use CVMDAdapter for the concrete cVMD integration boundary."
         )

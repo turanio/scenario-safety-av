@@ -14,16 +14,27 @@ htmlcov/
 data/raw/*
 data/processed/*
 data/synthetic/*
+data/highD/
+data/argoverse2/
+data/av2/
 !data/**/.gitkeep
 !data/README.md
 
 results/metrics/*
 results/figures/*
 results/logs/*
+results/qcnet_batch/artifacts/*.npz
+results/qcnet_batch/artifacts/batch_export_summary.csv
+results/qcnet_smoke/*.npz
 !results/**/.gitkeep
 !results/README.md
 
 outputs/
+external_repos/
+models/
+checkpoints/
+*.ckpt
+*.pt
+*.pth
 old_setup/
 notes/
-docs/

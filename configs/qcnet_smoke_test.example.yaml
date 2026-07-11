@@ -1,0 +1,7 @@
+qcnet_repo_path: "../external_repos/QCNet"
+av2_dataset_root: "data/argoverse2"
+checkpoint_path: "models/qcnet/QCNet_AV2.ckpt"
+output_dir: "results/qcnet_smoke"
+device: "cuda:0"
+scenario_id: null
+target_actor_id: null

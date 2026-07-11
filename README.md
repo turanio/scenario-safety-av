@@ -171,6 +171,18 @@ The key thesis table is:
 
 - `results/tables/key_findings_table.csv`
 
+## Optional QCNet External Smoke-Test Path
+
+Prepare a future QCNet real-model integration without adding QCNet, Argoverse 2, GPU, or CARLA as main dependencies:
+
+```bash
+python scripts/inspect_qcnet_repo.py --repo-path ../external_repos/QCNet
+python scripts/create_fake_qcnet_artifact.py
+python -m av_safety_eval.experiments.run_qcnet_artifact_evaluation --artifact results/qcnet_smoke/fake_qcnet_prediction.npz
+```
+
+The fake artifact is for converter testing only. See `docs/qcnet_external_smoke_test.md`.
+
 ## Project Structure
 
 ```text
