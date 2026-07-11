@@ -22,16 +22,16 @@ SELECTED_SCENARIOS = (
         ),
     },
     {
-        "scenario_id": "0058ed53-93bf-42a7-9bba-6df3f6ce20f5",
-        "scenario_type": "Large top-1 vs multimodal gap",
-        "figure_name": "distance_over_time_large_gap_0058ed.png",
+        "scenario_id": "0091bad9-e7b2-4c07-aa12-6b5fd03c63d2",
+        "scenario_type": "High-confidence close interaction",
+        "figure_name": "distance_over_time_high_confidence_close_0091bad.png",
         "interpretation": (
-            "Multimodal prediction exposes possible lower-probability risk, "
-            "but ground truth remains safe."
+            "Top-1, worst-case multimodal, and ground-truth distances consistently "
+            "identify a close interaction above the 3.0 m threshold."
         ),
         "planner_interpretation": (
-            "The top-1 planner does not brake, while the conservative multimodal "
-            "planner brakes for a lower-probability risk; ground truth remains above 3.0 m."
+            "Neither planner brakes because both predicted minima remain above 3.0 m; "
+            "top-1, worst-case, and ground truth still show a consistent close interaction."
         ),
     },
     {
@@ -247,7 +247,7 @@ def plot_scenario(
         color="#4b5563",
         linewidth=1.5,
         linestyle=":",
-        label=f"Collision threshold ({collision_threshold:.1f} m)",
+        label=f"Point-distance screening threshold ({collision_threshold:.1f} m)",
     )
 
     mark_minimum(ax, time, series["top1"], top1_color)
@@ -278,7 +278,7 @@ def rounded(value: object) -> float:
 def write_csv(path: Path, fields: tuple[str, ...], rows: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 

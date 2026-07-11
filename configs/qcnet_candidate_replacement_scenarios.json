@@ -1,0 +1,23 @@
+[
+  {
+    "scenario_id": "005f3e26-75cb-43a5-b61a-89343d490fdf",
+    "candidate_type": "Borderline near-miss threshold",
+    "slug": "borderline_near_miss_005f3e",
+    "recommended_use": "secondary_case",
+    "notes": "All minima occur before the horizon end; predicted distances cluster near 3.0 m while ground truth remains above the threshold."
+  },
+  {
+    "scenario_id": "0091bad9-e7b2-4c07-aa12-6b5fd03c63d2",
+    "candidate_type": "High-confidence close interaction",
+    "slug": "high_confidence_close_0091bad",
+    "recommended_use": "primary_case_study",
+    "notes": "Top-1 probability is high and top-1, worst-case, and ground-truth minima are closely aligned before the horizon end."
+  },
+  {
+    "scenario_id": "00170a57-eb8a-4947-8b7d-7b12af7af2db",
+    "candidate_type": "Moderate close interaction",
+    "slug": "moderate_close_00170a",
+    "recommended_use": "appendix_only",
+    "notes": "The three minimum distances are reasonably consistent and occur before the horizon end, but the interaction remains above 3.0 m and is less distinctive."
+  }
+]
