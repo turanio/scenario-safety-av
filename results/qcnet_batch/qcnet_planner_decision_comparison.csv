@@ -1,0 +1,4 @@
+scenario_id,scenario_type,top1_min_distance,worst_case_min_distance,ground_truth_min_distance,top1_planner_action,multimodal_planner_action,interpretation
+001749f1-bc1c-47fb-a13f-9ab1f2c050a8,Hidden risk,3.31713,0.448097,3.406408,NO_BRAKE,BRAKE,"The top-1 planner does not brake, while the conservative multimodal planner brakes for a lower-probability risk; ground truth remains above 3.0 m."
+0058ed53-93bf-42a7-9bba-6df3f6ce20f5,Large top-1 vs multimodal gap,8.172944,0.64589,9.283275,NO_BRAKE,BRAKE,"The top-1 planner does not brake, while the conservative multimodal planner brakes for a lower-probability risk; ground truth remains above 3.0 m."
+00351569-255c-433e-b97b-e2a844d1b6e0,Real near-miss,2.596661,2.044697,2.161666,BRAKE,BRAKE,"Both planners brake, and ground truth also falls below 3.0 m, making this the strongest real near-miss example in the batch."

@@ -1,0 +1,4 @@
+scenario_id,scenario_type,top1_probability,top1_min_distance,worst_case_min_distance,ground_truth_min_distance,multimodal_gap,interpretation
+001749f1-bc1c-47fb-a13f-9ab1f2c050a8,Hidden risk,0.264896,3.31713,0.448097,3.406408,2.869033,"Multimodal prediction exposes possible lower-probability risk, but ground truth remains safe."
+0058ed53-93bf-42a7-9bba-6df3f6ce20f5,Large top-1 vs multimodal gap,0.294472,8.172944,0.64589,9.283275,7.527054,"Multimodal prediction exposes possible lower-probability risk, but ground truth remains safe."
+00351569-255c-433e-b97b-e2a844d1b6e0,Real near-miss,0.306248,2.596661,2.044697,2.161666,0.551964,"Strongest real near-miss example: ground truth, top-1, and worst-case multimodal distances are all below the 3.0 m near-miss threshold."
