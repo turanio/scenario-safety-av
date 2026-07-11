@@ -1,0 +1,43 @@
+{
+  "artifact": "results/qcnet_smoke/qcnet_real_scenario_artifact.npz",
+  "evaluation_note": "Open-loop scenario check using real AV2 ego future trajectory and QCNet multimodal focal-agent predictions. This is not yet a closed-loop planner result.",
+  "scenario_id": "f93736af-279f-42ad-80e7-20a42164fec8",
+  "target_actor_id": "136110",
+  "ego_actor_id": "AV",
+  "coordinate_frame": "av2_global",
+  "source": "QCNet_AV2_checkpoint_on_AV2_val_tiny_with_ego_and_ground_truth",
+  "num_modes": 6,
+  "horizon_steps": 60,
+  "dt": 0.10000000149011612,
+  "probability_sum": 1.0000000521540642,
+  "probabilities": [
+    0.034758,
+    0.133486,
+    0.524554,
+    0.113501,
+    0.132769,
+    0.060933
+  ],
+  "top1_mode": 2,
+  "top1_probability": 0.524554,
+  "per_mode_min_distance": [
+    7.213529,
+    7.206817,
+    7.212407,
+    7.194863,
+    7.2022,
+    7.186581
+  ],
+  "top1_min_distance": 7.212407,
+  "worst_case_min_distance": 7.186581,
+  "probability_weighted_min_distance": 7.20678,
+  "ground_truth_min_distance": 7.210295,
+  "top1_near_miss": false,
+  "multimodal_worst_case_near_miss": false,
+  "ground_truth_near_miss": false,
+  "top1_collision": false,
+  "multimodal_worst_case_collision": false,
+  "ground_truth_collision": false,
+  "near_miss_threshold": 3.0,
+  "collision_threshold": 1.0
+}
