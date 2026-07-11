@@ -1,0 +1,4 @@
+scenario_id,scenario_type,top1_min_distance,worst_case_min_distance,ground_truth_min_distance,timestep_of_top1_min,timestep_of_worst_case_min,timestep_of_ground_truth_min,top1_mode,worst_case_mode,top1_probability,worst_case_mode_probability
+001749f1-bc1c-47fb-a13f-9ab1f2c050a8,Hidden risk,3.31713,0.448097,3.406408,38,51,36,1,5,0.264896,0.024045
+0091bad9-e7b2-4c07-aa12-6b5fd03c63d2,High-confidence close interaction,3.181133,3.136027,3.228321,16,19,18,4,0,0.912132,0.000377
+00351569-255c-433e-b97b-e2a844d1b6e0,Real near-miss,2.596661,2.044697,2.161666,22,59,23,3,0,0.306248,0.000969
