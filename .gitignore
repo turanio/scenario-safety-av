@@ -40,3 +40,13 @@ checkpoints/
 *.pth
 old_setup/
 notes/
+
+# Server QCNet generated artifacts
+results/qcnet_server_smoke/artifacts/*.npz
+results/qcnet_server_50/artifacts/*.npz
+results/qcnet_server_500/artifacts/*.npz
+
+# QCNet batch artifact summaries inside generated artifact folders
+results/qcnet_server_smoke/artifacts/batch_export_summary.csv
+results/qcnet_server_50/artifacts/batch_export_summary.csv
+results/qcnet_server_500/artifacts/batch_export_summary.csv

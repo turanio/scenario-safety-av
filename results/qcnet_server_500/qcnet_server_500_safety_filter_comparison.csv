@@ -1,0 +1,10 @@
+scenario_id,scenario_type,policy_name,action,is_safe,trigger_mode,trigger_probability,min_distance,threshold_m,probability_threshold,reason
+001749f1-bc1c-47fb-a13f-9ab1f2c050a8,Hidden risk,top1,NO_BRAKE,true,,,3.31713,3.0,,"Top-1 mode 1 (p=0.264890) remains at 3.317130 m, at or above the 3.000000 m threshold."
+001749f1-bc1c-47fb-a13f-9ab1f2c050a8,Hidden risk,worst_case,BRAKE,false,5,0.024045,0.448097,3.0,,"Mode 5 (p=0.024045) is the closest of all modes at 0.448097 m, below the 3.000000 m threshold."
+001749f1-bc1c-47fb-a13f-9ab1f2c050a8,Hidden risk,probability_aware_p005,NO_BRAKE,true,,,3.25732,3.0,0.05,All 5 eligible modes with p >= 0.050000 remain at or above the 3.000000 m threshold; closest eligible mode 0 (p=0.120881) reaches 3.257320 m.
+0091bad9-e7b2-4c07-aa12-6b5fd03c63d2,High-confidence close interaction,top1,NO_BRAKE,true,,,3.18123,3.0,,"Top-1 mode 4 (p=0.912144) remains at 3.181230 m, at or above the 3.000000 m threshold."
+0091bad9-e7b2-4c07-aa12-6b5fd03c63d2,High-confidence close interaction,worst_case,NO_BRAKE,true,,,3.136018,3.0,,All 6 modes remain at or above the 3.000000 m threshold; closest mode 0 (p=0.000377) reaches 3.136018 m.
+0091bad9-e7b2-4c07-aa12-6b5fd03c63d2,High-confidence close interaction,probability_aware_p005,NO_BRAKE,true,,,3.18123,3.0,0.05,All 1 eligible mode with p >= 0.050000 remains at or above the 3.000000 m threshold; closest eligible mode 4 (p=0.912144) reaches 3.181230 m.
+00351569-255c-433e-b97b-e2a844d1b6e0,Real near-miss,top1,BRAKE,false,3,0.306256,2.596661,3.0,,"Top-1 mode 3 (p=0.306256) reaches 2.596661 m, below the 3.000000 m threshold."
+00351569-255c-433e-b97b-e2a844d1b6e0,Real near-miss,worst_case,BRAKE,false,0,0.000969,2.044682,3.0,,"Mode 0 (p=0.000969) is the closest of all modes at 2.044682 m, below the 3.000000 m threshold."
+00351569-255c-433e-b97b-e2a844d1b6e0,Real near-miss,probability_aware_p005,BRAKE,false,5,0.176843,2.526894,3.0,0.05,"Mode 5 (p=0.176843) is the closest of 4 modes with p >= 0.050000, reaching 2.526894 m below the 3.000000 m threshold."
