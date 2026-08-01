@@ -50,3 +50,6 @@ results/qcnet_server_500/artifacts/*.npz
 results/qcnet_server_smoke/artifacts/batch_export_summary.csv
 results/qcnet_server_50/artifacts/batch_export_summary.csv
 results/qcnet_server_500/artifacts/batch_export_summary.csv
+
+# Local QCNet server smoke-test output
+results/qcnet_server_smoke/
