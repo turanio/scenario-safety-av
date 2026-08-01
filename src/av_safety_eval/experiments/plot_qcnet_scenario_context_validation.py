@@ -358,6 +358,13 @@ def plot_trajectory(
     )
 
 
+def format_probability(value: float) -> str:
+    probability = float(value)
+    if 0.0 < abs(probability) < 0.001:
+        return f"{probability:.2e}"
+    return f"{probability:.3f}"
+
+
 def draw_trajectories(ax: plt.Axes, analysis: dict) -> None:
     top1_mode = analysis["top1_mode"]
     worst_case_mode = analysis["worst_case_mode"]
@@ -382,7 +389,7 @@ def draw_trajectories(ax: plt.Axes, analysis: dict) -> None:
         color="#1f4e79",
         label=(
             f"Top-1 QCNet mode {top1_mode} "
-            f"(p={analysis['probabilities'][top1_mode]:.3f})"
+            f"(p={format_probability(analysis['probabilities'][top1_mode])})"
         ),
         linewidth=2.5,
         zorder=6,
@@ -393,7 +400,7 @@ def draw_trajectories(ax: plt.Axes, analysis: dict) -> None:
         color="#b22222",
         label=(
             f"Worst-case QCNet mode {worst_case_mode} "
-            f"(p={analysis['probabilities'][worst_case_mode]:.3f})"
+            f"(p={format_probability(analysis['probabilities'][worst_case_mode])})"
         ),
         linewidth=2.5,
         linestyle="--",
