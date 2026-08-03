@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+from av_safety_eval.carla.carla_client import CarlaClientConfig, CarlaSession
 from av_safety_eval.carla.metrics import PolicyMetricTracker
 from av_safety_eval.carla.scenarios import (
     HiddenRiskCarlaScenario,
@@ -143,3 +144,59 @@ def test_initial_hypotheses_create_hidden_risk_policy_disagreement() -> None:
     assert worst_case.action == BRAKE
     assert probability_aware.action == BRAKE
     assert probability_aware.trigger_mode == 1
+
+
+def test_carla_session_tick_uses_keyword_timeout() -> None:
+    class FakeWorld:
+        def __init__(self) -> None:
+            self.timeout = None
+
+        def tick(self, *, timeout: float) -> int:
+            self.timeout = timeout
+            return 42
+
+    session = CarlaSession(CarlaClientConfig(tick_timeout_seconds=7.5))
+    session.world = FakeWorld()
+
+    assert session.tick() == 42
+    assert session.world.timeout == pytest.approx(7.5)
+
+
+def test_carla_session_tick_falls_back_to_seconds_keyword() -> None:
+    class FakeWorld:
+        def __init__(self) -> None:
+            self.seconds = None
+
+        def tick(self, *, seconds: float) -> int:
+            self.seconds = seconds
+            return 43
+
+    session = CarlaSession(CarlaClientConfig(tick_timeout_seconds=8.0))
+    session.world = FakeWorld()
+
+    assert session.tick() == 43
+    assert session.world.seconds == pytest.approx(8.0)
+
+
+def test_carla_session_tick_reports_timeout_failure() -> None:
+    class FakeWorld:
+        def tick(self, *, timeout: float) -> int:
+            raise RuntimeError("server time-out")
+
+    session = CarlaSession(CarlaClientConfig(tick_timeout_seconds=3.0))
+    session.world = FakeWorld()
+
+    with pytest.raises(RuntimeError, match="tick 1 failed or timed out after 3.0"):
+        session.tick()
+
+
+def test_carla_session_refuses_unbounded_tick_fallback() -> None:
+    class FakeWorld:
+        def tick(self) -> int:
+            return 44
+
+    session = CarlaSession(CarlaClientConfig())
+    session.world = FakeWorld()
+
+    with pytest.raises(RuntimeError, match="does not accept a bounded timeout"):
+        session.tick()

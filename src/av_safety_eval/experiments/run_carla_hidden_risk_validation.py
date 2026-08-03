@@ -49,11 +49,29 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--port", type=int, default=2000)
     parser.add_argument("--timeout", type=float, default=20.0)
     parser.add_argument(
+        "--tick-timeout",
+        type=float,
+        default=60.0,
+        help="Maximum seconds to wait for each synchronous CARLA tick.",
+    )
+    parser.add_argument("--traffic-manager-port", type=int, default=8000)
+    parser.add_argument(
         "--town",
         default=None,
         help="Optional CARLA town to load; Town04 or Town05 is recommended.",
     )
     parser.add_argument("--duration", type=float, default=6.0)
+    parser.add_argument(
+        "--max-steps",
+        type=int,
+        default=2000,
+        help="Hard upper bound on simulation steps for each policy.",
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print every bounded CARLA tick as it starts.",
+    )
     parser.add_argument(
         "--output-dir",
         type=Path,
@@ -102,14 +120,23 @@ def _run_policy(
     config: HiddenRiskScenarioConfig,
     policy_name: str,
     evaluator: Callable[[np.ndarray, np.ndarray], SafetyFilterResult],
+    max_steps: int,
 ) -> tuple[CarlaPolicyMetrics, list[float], list[float]]:
     scenario = HiddenRiskCarlaScenario(config)
-    actors = scenario.spawn(session)
     controller = SimpleLongitudinalController(target_speed_mps=config.ego_target_speed_mps)
     tracker = PolicyMetricTracker(config.near_miss_threshold_m)
+    actors = None
 
+    print(f"[CARLA] starting policy {policy_name}")
     try:
+        actors = scenario.spawn(session)
+        print(f"[CARLA] spawn completed for {policy_name}")
         for step in range(config.num_steps):
+            if step >= max_steps:
+                raise RuntimeError(
+                    f"Policy {policy_name} reached the maximum of {max_steps} "
+                    "simulation steps before completing."
+                )
             time_seconds = step * config.fixed_delta_seconds
             modes = scenario.synthetic_future_modes(time_seconds)
             ego_future = scenario.ego_constant_velocity_future(actors.ego)
@@ -137,6 +164,12 @@ def _run_policy(
                 braking=should_brake,
                 collision_detected=actors.collision_recorder.collision_detected,
             )
+            completed_steps = step + 1
+            if completed_steps % 20 == 0 or completed_steps == config.num_steps:
+                print(
+                    f"[CARLA] {policy_name}: completed step "
+                    f"{completed_steps}/{config.num_steps}"
+                )
 
         metrics = tracker.finalize(
             policy_name=policy_name,
@@ -144,16 +177,25 @@ def _run_policy(
             collision_sensor_available=actors.collision_recorder.available,
             collision_note=actors.collision_recorder.note,
         )
+        print(f"[CARLA] finished policy {policy_name}")
         return metrics, tracker.times, tracker.distances
     finally:
         session.destroy_actors()
-        session.tick()
 
 
 def run_experiment(
     client_config: CarlaClientConfig,
     scenario_config: HiddenRiskScenarioConfig,
+    max_steps: int = 2000,
 ) -> tuple[list[CarlaPolicyMetrics], dict[str, tuple[list[float], list[float]]]]:
+    if max_steps <= 0:
+        raise ValueError("max_steps must be positive")
+    if scenario_config.num_steps > max_steps:
+        raise ValueError(
+            f"Scenario requires {scenario_config.num_steps} steps, exceeding the "
+            f"configured maximum of {max_steps}."
+        )
+
     metrics: list[CarlaPolicyMetrics] = []
     distance_series: dict[str, tuple[list[float], list[float]]] = {}
     evaluators = _policy_evaluators(scenario_config)
@@ -165,6 +207,7 @@ def run_experiment(
                 scenario_config,
                 policy_name,
                 evaluators[policy_name],
+                max_steps,
             )
             metrics.append(result)
             distance_series[policy_name] = (times, distances)
@@ -337,13 +380,20 @@ def main() -> None:
         host=args.host,
         port=args.port,
         timeout_seconds=args.timeout,
+        tick_timeout_seconds=args.tick_timeout,
         town=args.town,
         fixed_delta_seconds=scenario_config.fixed_delta_seconds,
+        traffic_manager_port=args.traffic_manager_port,
+        verbose=args.verbose,
     )
     results_csv, summary_md, distance_png = _prepare_outputs(
         args.output_dir, args.overwrite
     )
-    metrics, series = run_experiment(client_config, scenario_config)
+    metrics, series = run_experiment(
+        client_config,
+        scenario_config,
+        max_steps=args.max_steps,
+    )
     _write_results(results_csv, metrics)
     _plot_distances(distance_png, series, scenario_config.near_miss_threshold_m)
     summary_md.write_text(

@@ -6,6 +6,10 @@ from dataclasses import dataclass
 from typing import Any
 
 
+class _BoundedTickUnsupported(RuntimeError):
+    """Internal signal that the binding exposes only an unbounded tick."""
+
+
 def require_carla() -> Any:
     """Import the optional CARLA Python API with an actionable error."""
 
@@ -26,8 +30,11 @@ class CarlaClientConfig:
     host: str = "127.0.0.1"
     port: int = 2000
     timeout_seconds: float = 20.0
+    tick_timeout_seconds: float = 60.0
     town: str | None = None
     fixed_delta_seconds: float = 0.05
+    traffic_manager_port: int = 8000
+    verbose: bool = False
 
     def __post_init__(self) -> None:
         if not self.host:
@@ -36,8 +43,12 @@ class CarlaClientConfig:
             raise ValueError("port must be positive")
         if self.timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
+        if self.tick_timeout_seconds <= 0:
+            raise ValueError("tick_timeout_seconds must be positive")
         if self.fixed_delta_seconds <= 0:
             raise ValueError("fixed_delta_seconds must be positive")
+        if self.traffic_manager_port <= 0:
+            raise ValueError("traffic_manager_port must be positive")
 
 
 @dataclass
@@ -64,8 +75,9 @@ class CarlaSession:
         self.carla: Any | None = None
         self.client: Any | None = None
         self.world: Any | None = None
-        self._original_settings: Any | None = None
+        self.traffic_manager: Any | None = None
         self._actors: list[Any] = []
+        self._tick_count = 0
 
     def __enter__(self) -> "CarlaSession":
         carla = require_carla()
@@ -81,14 +93,14 @@ class CarlaSession:
         self.carla = carla
         self.client = client
         self.world = world
-        self._original_settings = world.get_settings()
 
         try:
             settings = world.get_settings()
             settings.synchronous_mode = True
             settings.fixed_delta_seconds = self.config.fixed_delta_seconds
             world.apply_settings(settings)
-            world.tick()
+            self._configure_traffic_manager(client)
+            self.tick()
         except Exception:
             self.close()
             raise
@@ -97,10 +109,53 @@ class CarlaSession:
     def __exit__(self, _exc_type: Any, _exc: Any, _traceback: Any) -> None:
         self.close()
 
+    def _configure_traffic_manager(self, client: Any) -> None:
+        try:
+            traffic_manager = client.get_trafficmanager(
+                self.config.traffic_manager_port
+            )
+            traffic_manager.set_synchronous_mode(True)
+            self.traffic_manager = traffic_manager
+        except (AttributeError, RuntimeError) as exc:
+            if self.config.verbose:
+                print(f"[CARLA] Traffic Manager synchronization unavailable: {exc}")
+
     def tick(self) -> int:
+        """Advance one bounded synchronous frame or raise a diagnostic error."""
+
         if self.world is None:
             raise RuntimeError("CARLA session is not connected")
-        return int(self.world.tick())
+
+        tick_number = self._tick_count + 1
+        timeout = self.config.tick_timeout_seconds
+        if self.config.verbose:
+            print(f"[CARLA] running tick {tick_number} (timeout={timeout:.1f}s)")
+
+        try:
+            try:
+                frame = self.world.tick(timeout=timeout)
+            except TypeError:
+                try:
+                    frame = self.world.tick(seconds=timeout)
+                except TypeError:
+                    try:
+                        frame = self.world.tick(timeout)
+                    except TypeError as exc:
+                        raise _BoundedTickUnsupported(
+                            "This CARLA World.tick API does not accept a bounded "
+                            "timeout; refusing to call an unbounded tick."
+                        ) from exc
+        except _BoundedTickUnsupported:
+            raise
+        except Exception as exc:
+            raise RuntimeError(
+                f"CARLA world tick {tick_number} failed or timed out after "
+                f"{timeout:.1f} seconds. Check that the server is responsive and "
+                "that no other client controls synchronous ticking."
+            ) from exc
+
+        self._tick_count = tick_number
+        return int(frame)
 
     def spawn_vehicle(
         self,
@@ -166,11 +221,23 @@ class CarlaSession:
 
     def close(self) -> None:
         self.destroy_actors()
-        if self.world is not None and self._original_settings is not None:
+        if self.traffic_manager is not None:
             try:
-                self.world.apply_settings(self._original_settings)
+                self.traffic_manager.set_synchronous_mode(False)
             except RuntimeError:
                 pass
+        if self.world is not None:
+            try:
+                settings = self.world.get_settings()
+                settings.synchronous_mode = False
+                settings.fixed_delta_seconds = None
+                self.world.apply_settings(settings)
+                if self.config.verbose:
+                    print("[CARLA] world reset to asynchronous mode")
+            except RuntimeError as exc:
+                if self.config.verbose:
+                    print(f"[CARLA] could not reset asynchronous mode: {exc}")
         self.world = None
         self.client = None
+        self.traffic_manager = None
         self.carla = None
