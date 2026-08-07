@@ -1,0 +1,4 @@
+policy_name,minimum_distance,near_miss,collision,collision_note,number_of_braking_interventions,first_braking_time,final_ego_speed,scenario_success
+top1_policy,4.615521,False,True,Collision status is based on the CARLA collision sensor.,1,1.45,10.324881,False
+worst_case_policy,7.078961,False,False,Collision status is based on the CARLA collision sensor.,7,0.1,8.742783,True
+probability_aware_policy,7.078961,False,False,Collision status is based on the CARLA collision sensor.,7,0.1,8.742783,True
