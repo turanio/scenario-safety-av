@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from av_safety_eval.carla.image_capture import CameraCaptureConfig, LatestRgbFrame
+
 
 class _BoundedTickUnsupported(RuntimeError):
     """Internal signal that the binding exposes only an unbounded tick."""
@@ -207,6 +209,52 @@ class CarlaSession:
                 f"CARLA message: {exc}"
             )
         return recorder
+
+    def attach_rgb_camera(
+        self,
+        vehicle: Any,
+        receiver: LatestRgbFrame,
+        capture_config: CameraCaptureConfig,
+    ) -> Any:
+        """Attach an elevated, ego-relative RGB camera for selected key frames."""
+
+        if self.world is None or self.carla is None:
+            raise RuntimeError("CARLA session is not connected")
+
+        blueprint = self.world.get_blueprint_library().find("sensor.camera.rgb")
+        attributes = {
+            "image_size_x": str(capture_config.image_width),
+            "image_size_y": str(capture_config.image_height),
+            "fov": str(capture_config.field_of_view_degrees),
+            "sensor_tick": str(self.config.fixed_delta_seconds),
+        }
+        for name, value in attributes.items():
+            if blueprint.has_attribute(name):
+                blueprint.set_attribute(name, value)
+
+        transform = self.carla.Transform(
+            self.carla.Location(
+                x=capture_config.forward_offset_m,
+                z=capture_config.height_m,
+            ),
+            self.carla.Rotation(pitch=capture_config.pitch_degrees),
+        )
+        try:
+            sensor = self.world.spawn_actor(
+                blueprint,
+                transform,
+                attach_to=vehicle,
+                attachment_type=self.carla.AttachmentType.Rigid,
+            )
+        except (AttributeError, TypeError):
+            sensor = self.world.spawn_actor(
+                blueprint,
+                transform,
+                attach_to=vehicle,
+            )
+        self._actors.append(sensor)
+        sensor.listen(receiver)
+        return sensor
 
     def destroy_actors(self) -> None:
         for actor in reversed(self._actors):

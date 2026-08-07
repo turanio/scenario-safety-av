@@ -11,6 +11,13 @@ import numpy as np
 from av_safety_eval.carla.carla_client import CarlaSession
 
 
+ACTUAL_TARGET_BEHAVIORS = (
+    "safe_continuation",
+    "moderate_cut_in",
+    "aggressive_cut_in",
+)
+
+
 @dataclass(frozen=True)
 class HiddenRiskScenarioConfig:
     """Parameters for one deterministic adjacent-lane cut-in interaction."""
@@ -26,6 +33,7 @@ class HiddenRiskScenarioConfig:
     near_miss_threshold_m: float = 3.0
     probability_threshold: float = 0.05
     mode_probabilities: tuple[float, float, float] = (0.78, 0.18, 0.04)
+    actual_target_behavior: str = "moderate_cut_in"
 
     def __post_init__(self) -> None:
         positive = {
@@ -50,6 +58,9 @@ class HiddenRiskScenarioConfig:
             raise ValueError("mode_probabilities must contain three non-negative values")
         if not np.isclose(float(probabilities.sum()), 1.0):
             raise ValueError("mode_probabilities must sum to one")
+        if self.actual_target_behavior not in ACTUAL_TARGET_BEHAVIORS:
+            allowed = ", ".join(ACTUAL_TARGET_BEHAVIORS)
+            raise ValueError(f"actual_target_behavior must be one of: {allowed}")
 
     @property
     def num_steps(self) -> int:
@@ -58,6 +69,70 @@ class HiddenRiskScenarioConfig:
     @property
     def prediction_steps(self) -> int:
         return int(round(self.prediction_horizon_seconds / self.fixed_delta_seconds))
+
+
+@dataclass(frozen=True)
+class HiddenRiskScenarioVariant:
+    """Named controlled scenario and its thesis-safe interpretation."""
+
+    name: str
+    inspired_by: str
+    config: HiddenRiskScenarioConfig
+    interpretation: str
+
+
+def build_hidden_risk_scenario_suite(
+    duration_seconds: float = 6.0,
+) -> tuple[HiddenRiskScenarioVariant, ...]:
+    """Return the three small controlled variants used in CARLA validation."""
+
+    return (
+        HiddenRiskScenarioVariant(
+            name="hidden_low_probability",
+            inspired_by="AV2 scenario 001749",
+            config=HiddenRiskScenarioConfig(
+                duration_seconds=duration_seconds,
+                cut_in_duration_seconds=0.8,
+                mode_probabilities=(0.93, 0.03, 0.04),
+                actual_target_behavior="aggressive_cut_in",
+            ),
+            interpretation=(
+                "The aggressive cut-in hypothesis is below the probability cutoff, "
+                "so the probability-aware policy is expected to behave closer to "
+                "top-1 than to the worst-case policy."
+            ),
+        ),
+        HiddenRiskScenarioVariant(
+            name="borderline_probability_aware",
+            inspired_by="AV2 scenario 00e2cd",
+            config=HiddenRiskScenarioConfig(
+                duration_seconds=duration_seconds,
+                cut_in_duration_seconds=1.5,
+                mode_probabilities=(0.82, 0.14, 0.04),
+                actual_target_behavior="moderate_cut_in",
+            ),
+            interpretation=(
+                "The moderate cut-in hypothesis has probability 0.14 and passes "
+                "the cutoff, so probability-aware and worst-case policies can "
+                "respond before a top-1-only policy."
+            ),
+        ),
+        HiddenRiskScenarioVariant(
+            name="near_miss_style",
+            inspired_by="AV2 scenario 003515",
+            config=HiddenRiskScenarioConfig(
+                duration_seconds=duration_seconds,
+                cut_in_duration_seconds=1.5,
+                mode_probabilities=(0.15, 0.70, 0.15),
+                actual_target_behavior="moderate_cut_in",
+            ),
+            interpretation=(
+                "The moderate cut-in is the highest-probability hypothesis, so all "
+                "three policies are expected to brake; timing and resulting vehicle "
+                "behavior remain the comparison of interest."
+            ),
+        ),
+    )
 
 
 @dataclass(frozen=True)
@@ -256,13 +331,16 @@ class HiddenRiskCarlaScenario:
     def target_local_state(self, time_seconds: float) -> tuple[float, float]:
         if self.geometry is None:
             raise RuntimeError("Scenario geometry has not been initialized")
-        progress = (
-            (time_seconds - self.config.cut_in_start_seconds)
-            / self.config.cut_in_duration_seconds
-        )
-        lateral = self.geometry.target_lateral_offset_m * (
-            1.0 - float(_smoothstep(progress))
-        )
+        if self.config.actual_target_behavior == "safe_continuation":
+            lateral = self.geometry.target_lateral_offset_m
+        else:
+            progress = (
+                (time_seconds - self.config.cut_in_start_seconds)
+                / self.config.cut_in_duration_seconds
+            )
+            lateral = self.geometry.target_lateral_offset_m * (
+                1.0 - float(_smoothstep(progress))
+            )
         longitudinal = (
             self.config.initial_longitudinal_gap_m
             + self.config.target_speed_mps * time_seconds

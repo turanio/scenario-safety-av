@@ -1,14 +1,22 @@
+import csv
+
 import numpy as np
 import pytest
 
 from av_safety_eval.carla.carla_client import CarlaClientConfig, CarlaSession
-from av_safety_eval.carla.metrics import PolicyMetricTracker
+from av_safety_eval.carla.metrics import CarlaPolicyMetrics, PolicyMetricTracker
 from av_safety_eval.carla.scenarios import (
     HiddenRiskCarlaScenario,
     HiddenRiskScenarioConfig,
     ScenarioGeometry,
+    build_hidden_risk_scenario_suite,
 )
 from av_safety_eval.carla.vehicle_controller import SimpleLongitudinalController
+from av_safety_eval.experiments.run_carla_hidden_risk_validation import (
+    SUITE_RESULT_FIELDS,
+    _suite_summary_markdown,
+    _write_suite_results,
+)
 from av_safety_eval.planning.safety_filter import (
     BRAKE,
     NO_BRAKE,
@@ -200,3 +208,84 @@ def test_carla_session_refuses_unbounded_tick_fallback() -> None:
 
     with pytest.raises(RuntimeError, match="does not accept a bounded timeout"):
         session.tick()
+
+
+def test_scenario_suite_has_expected_initial_policy_decisions() -> None:
+    expected_actions = {
+        "hidden_low_probability": (NO_BRAKE, BRAKE, NO_BRAKE),
+        "borderline_probability_aware": (NO_BRAKE, BRAKE, BRAKE),
+        "near_miss_style": (BRAKE, BRAKE, BRAKE),
+    }
+    variants = build_hidden_risk_scenario_suite()
+
+    assert tuple(variant.name for variant in variants) == tuple(expected_actions)
+    for variant in variants:
+        config = variant.config
+        scenario = HiddenRiskCarlaScenario(config)
+        scenario.geometry = ScenarioGeometry(
+            origin_x=0.0,
+            origin_y=0.0,
+            origin_z=0.0,
+            yaw_degrees=0.0,
+            forward_xy=np.array([1.0, 0.0]),
+            right_xy=np.array([0.0, 1.0]),
+            target_lateral_offset_m=3.5,
+        )
+        modes = scenario.synthetic_future_modes(time_seconds=0.0)
+        times = (
+            np.arange(1, config.prediction_steps + 1, dtype=float)
+            * config.fixed_delta_seconds
+        )
+        ego_future = np.column_stack(
+            [config.ego_target_speed_mps * times, np.zeros_like(times)]
+        )
+        distances = np.linalg.norm(
+            modes.positions - ego_future[None, :, :],
+            axis=-1,
+        )
+        actions = (
+            evaluate_top1_filter(distances, modes.probabilities).action,
+            evaluate_worst_case_filter(distances, modes.probabilities).action,
+            evaluate_probability_aware_filter(
+                distances,
+                modes.probabilities,
+                probability_threshold=config.probability_threshold,
+            ).action,
+        )
+
+        assert actions == expected_actions[variant.name]
+
+
+def test_scenario_suite_writes_thesis_facing_outputs(tmp_path) -> None:
+    variant = build_hidden_risk_scenario_suite()[0]
+    metric = CarlaPolicyMetrics(
+        policy_name="top1_policy",
+        minimum_distance=2.5,
+        near_miss=True,
+        collision=False,
+        collision_note="CARLA collision sensor",
+        number_of_braking_interventions=1,
+        first_braking_time=1.25,
+        final_ego_speed=4.0,
+        scenario_success=True,
+    )
+    csv_path = tmp_path / "suite.csv"
+
+    _write_suite_results(csv_path, [(variant, metric)])
+    with csv_path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        rows = list(reader)
+
+    assert reader.fieldnames == list(SUITE_RESULT_FIELDS)
+    assert rows[0]["scenario_name"] == "hidden_low_probability"
+    assert rows[0]["actual_target_behavior"] == "aggressive_cut_in"
+    assert rows[0]["mode_probabilities"] == "[0.93, 0.03, 0.04]"
+
+    summary = _suite_summary_markdown(
+        [(variant, metric)],
+        (variant,),
+        CarlaClientConfig(),
+    )
+    assert "not intended as a general CARLA benchmark" in summary
+    assert "QCNet/AV2 500-scenario evaluation" in summary
+    assert "online QCNet" in summary
