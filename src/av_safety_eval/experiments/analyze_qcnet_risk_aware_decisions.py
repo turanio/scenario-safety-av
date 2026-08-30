@@ -260,6 +260,67 @@ def reliability_rows(
     return rows
 
 
+def adaptive_reliability_rows(
+    labels: Sequence[bool],
+    scores: Sequence[float],
+    min_bin_count: int = 200,
+    max_bins: int = 10,
+) -> list[dict[str, object]]:
+    """Create tie-preserving adaptive bins, keeping the zero-mass group intact."""
+    observed = np.asarray(labels, dtype=bool)
+    score_array = np.asarray(scores, dtype=float)
+    if observed.shape != score_array.shape or observed.ndim != 1:
+        raise ValueError("labels and scores must be matching one-dimensional arrays")
+    if min_bin_count <= 0 or max_bins < 2:
+        raise ValueError("min_bin_count must be positive and max_bins must be at least 2")
+
+    rows = []
+    zero_mask = score_array == 0.0
+    if zero_mask.any():
+        rows.append(
+            {
+                "bin_lower": 0.0,
+                "bin_upper": 0.0,
+                "scenario_count": int(zero_mask.sum()),
+                "mean_score": 0.0,
+                "observed_event_rate": float(np.mean(observed[zero_mask])),
+            }
+        )
+
+    positive_scores = score_array[~zero_mask]
+    positive_labels = observed[~zero_mask]
+    if positive_scores.size == 0:
+        return rows
+
+    order = np.argsort(positive_scores, kind="stable")
+    positive_scores = positive_scores[order]
+    positive_labels = positive_labels[order]
+    available_bins = max_bins - len(rows)
+    target_count = max(min_bin_count, int(np.ceil(positive_scores.size / available_bins)))
+
+    start = 0
+    while start < positive_scores.size:
+        end = min(start + target_count, positive_scores.size)
+        while end < positive_scores.size and positive_scores[end] == positive_scores[end - 1]:
+            end += 1
+        remaining = positive_scores.size - end
+        if 0 < remaining < min_bin_count:
+            end = positive_scores.size
+        bin_scores = positive_scores[start:end]
+        bin_labels = positive_labels[start:end]
+        rows.append(
+            {
+                "bin_lower": float(bin_scores[0]),
+                "bin_upper": float(bin_scores[-1]),
+                "scenario_count": int(bin_scores.size),
+                "mean_score": float(np.mean(bin_scores)),
+                "observed_event_rate": float(np.mean(bin_labels)),
+            }
+        )
+        start = end
+    return rows
+
+
 def _existing_policy_rows(
     records: Sequence[Mapping[str, object]],
     realized_events: np.ndarray,
@@ -322,8 +383,22 @@ def _quality_rows(
     unsafe_mass: np.ndarray,
     expected_risk: np.ndarray,
     realized_events: np.ndarray,
+    reliability_min_bin_count: int,
+    reliability_max_bins: int,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
     metric_rows = [
+        {
+            "record_type": "score_metric",
+            "score_name": "recorded_av2_future_reference",
+            "metric": "prevalence",
+            "value": float(np.mean(realized_events)),
+            "bin_lower": "",
+            "bin_upper": "",
+            "scenario_count": len(realized_events),
+            "mean_score": "",
+            "observed_event_rate": "",
+            "notes": "Recorded AV2 future point-distance threshold-event prevalence.",
+        },
         {
             "record_type": "score_metric",
             "score_name": "unsafe_probability_mass",
@@ -385,7 +460,12 @@ def _quality_rows(
             "notes": "Non-interpolated average precision; exploratory for this cohort.",
         },
     ]
-    reliability = reliability_rows(realized_events, unsafe_mass)
+    reliability = adaptive_reliability_rows(
+        realized_events,
+        unsafe_mass,
+        min_bin_count=reliability_min_bin_count,
+        max_bins=reliability_max_bins,
+    )
     for row in reliability:
         metric_rows.append(
             {
@@ -394,7 +474,7 @@ def _quality_rows(
                 "metric": "observed_realized_event_frequency",
                 "value": "",
                 **row,
-                "notes": "Fixed-width bin; empty bins are retained explicitly.",
+                "notes": "Adaptive tie-preserving bin; no recalibration was fitted.",
             }
         )
     return metric_rows, reliability
@@ -414,6 +494,7 @@ def _plot_tradeoff(
     existing_rows: Sequence[Mapping[str, object]],
     mass_rows: Sequence[Mapping[str, object]],
     loss_rows: Sequence[Mapping[str, object]],
+    scenario_count: int,
 ) -> None:
     fig, ax = plt.subplots(figsize=(8.4, 5.6))
     families = (
@@ -451,6 +532,7 @@ def _plot_tradeoff(
             r"Probability-aware $\theta=0.05$",
             "P",
         ),
+        (_row_at_threshold(mass_rows, 0.10), r"Risk mass $\rho=0.10$", "*"),
     )
     for row, label, marker in markers:
         ax.scatter(
@@ -466,7 +548,7 @@ def _plot_tradeoff(
 
     ax.set_xlabel("Intervention rate")
     ax.set_ylabel("Recall of recorded AV2 threshold events")
-    ax.set_title("Exploratory risk-policy trade-off on 500 AV2 scenarios")
+    ax.set_title(f"Risk-policy trade-off on {scenario_count} AV2 scenarios")
     ax.set_xlim(-0.002, 0.102)
     ax.set_ylim(-0.02, 1.04)
     ax.grid(True, alpha=0.25)
@@ -498,7 +580,7 @@ def _plot_reliability(path: Path, rows: Sequence[Mapping[str, object]], n: int) 
         ax.annotate(f"n={count}", (x_value, y_value), xytext=(5, 5), textcoords="offset points", fontsize=8)
     ax.set_xlabel("Mean unsafe probability mass in bin")
     ax.set_ylabel("Recorded AV2 threshold-event frequency")
-    ax.set_title(f"Unsafe-mass reliability (exploratory, n={n})")
+    ax.set_title(f"Unsafe mass vs recorded AV2 outcome (n={n})")
     ax.set_xlim(-0.02, 1.08)
     ax.set_ylim(-0.02, 1.02)
     ax.grid(True, alpha=0.25)
@@ -536,20 +618,13 @@ def _write_summary(
     mass_rows: Sequence[Mapping[str, object]],
     loss_rows: Sequence[Mapping[str, object]],
     quality_rows: Sequence[Mapping[str, object]],
+    fixed_policy_rows: Sequence[Mapping[str, object]],
 ) -> None:
     quality = {
         (str(row["score_name"]), str(row["metric"])): float(row["value"])
         for row in quality_rows
         if row["record_type"] == "score_metric"
     }
-    selected_existing = (
-        ("Top-1", _row_by_name(existing_rows, "top1")),
-        ("Worst-case", _row_by_name(existing_rows, "worst_case")),
-        (
-            "Probability-aware theta=0.05",
-            _row_by_name(existing_rows, "probability_aware_theta_0.05"),
-        ),
-    )
     selected_mass = [(rho, _row_at_threshold(mass_rows, rho)) for rho in (0.01, 0.05, 0.10)]
     selected_loss = [(eta, _row_at_threshold(loss_rows, eta)) for eta in (0.01, 0.05, 0.10)]
     realized_count = sum(bool(row["ground_truth_event"]) for row in records)
@@ -559,8 +634,8 @@ def _write_summary(
         "",
         "## Scope",
         "",
-        f"This Stage C extension uses the existing {len(records)} QCNet artifacts only; QCNet "
-        "inference was not rerun. It remains open-loop point-trajectory screening on an AV2 "
+        f"This analysis post-processes {len(records)} exported QCNet artifacts. It remains "
+        "open-loop point-trajectory screening on an AV2 "
         "validation subset, not closed-loop validation or collision-risk estimation.",
         "",
         "## 1. Prediction-distribution risk proxies",
@@ -584,12 +659,21 @@ def _write_summary(
         f"{len(records)}** scenarios. It describes the one recorded AV2 future, not complete "
         "ground-truth safety risk; non-realized QCNet alternatives may remain plausible.",
         "",
-        "### Existing policies",
+        "### Primary fixed-policy comparison",
         "",
         "| Policy | Interventions | Rate | TP | FP / extra | FN | Recall | Precision | FPR |",
         "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
-    lines.extend(_metrics_table_row(label, row) for label, row in selected_existing)
+    fixed_labels = {
+        "top1": "Top-1",
+        "worst_case": "Worst-case",
+        "probability_aware_theta_0.05": "Probability-aware theta=0.05",
+        "risk_mass": "Risk mass rho=0.10",
+    }
+    lines.extend(
+        _metrics_table_row(fixed_labels[str(row["policy_name"])], row)
+        for row in fixed_policy_rows
+    )
     lines.extend(
         [
             "",
@@ -628,10 +712,10 @@ def _write_summary(
             f"{quality[('expected_distance_deficit_risk', 'auroc')]:.6f} | "
             f"{quality[('expected_distance_deficit_risk', 'auprc')]:.6f} |",
             "",
-            "AUPRC is reported as non-interpolated average precision. With only "
-            f"{realized_count} realized positives in {len(records)} scenarios, these discrimination "
-            "and reliability results are exploratory. No fitting or recalibration was performed, "
-            "and they do not support strong calibration claims.",
+            "AUPRC is reported as non-interpolated average precision and should be interpreted "
+            f"relative to the prevalence of {realized_count / len(records):.6f}. No fitting or "
+            "recalibration was performed. These metrics evaluate correspondence to the one "
+            "recorded AV2 future reference, not calibrated physical collision probability.",
             "",
             "## Outputs",
             "",
@@ -639,9 +723,10 @@ def _write_summary(
             "- `risk_mass_policy_sweep.csv`: all `rho` operating points.",
             "- `expected_loss_policy_sweep.csv`: all `eta` operating points.",
             "- `existing_policy_realized_outcomes.csv`: top-1, worst-case, and probability-filter results.",
+            "- `fixed_policy_comparison.csv`: the four predefined primary policies.",
             "- `risk_score_quality.csv`: exploratory score metrics and reliability bins.",
             "- `risk_decision_tradeoff.png`: recall/intervention-rate curves.",
-            "- `unsafe_mass_reliability.png`: fixed-bin exploratory reliability view.",
+            "- `unsafe_mass_reliability.png`: adaptive-bin recorded-outcome reliability view.",
             "",
         ]
     )
@@ -666,6 +751,8 @@ def parse_args() -> argparse.Namespace:
         default=Path("results/qcnet_server_500/risk_aware_decision"),
     )
     parser.add_argument("--safety-threshold-m", type=float, default=3.0)
+    parser.add_argument("--reliability-min-bin-count", type=int, default=200)
+    parser.add_argument("--reliability-max-bins", type=int, default=10)
     parser.add_argument(
         "--reproduction-profile",
         choices=REPRODUCTION_PROFILES,
@@ -728,19 +815,33 @@ def main() -> None:
         "expected_loss",
         "eta",
     )
-    quality_rows, reliability = _quality_rows(unsafe_mass, expected_risk, realized_events)
+    quality_rows, reliability = _quality_rows(
+        unsafe_mass,
+        expected_risk,
+        realized_events,
+        args.reliability_min_bin_count,
+        args.reliability_max_bins,
+    )
+    fixed_policy_rows = [
+        _row_by_name(existing_rows, "top1"),
+        _row_by_name(existing_rows, "worst_case"),
+        _row_by_name(existing_rows, "probability_aware_theta_0.05"),
+        _row_at_threshold(mass_rows, 0.10),
+    ]
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     _write_csv(args.output_dir / "risk_aware_per_scenario.csv", per_scenario)
     _write_csv(args.output_dir / "risk_mass_policy_sweep.csv", mass_rows)
     _write_csv(args.output_dir / "expected_loss_policy_sweep.csv", loss_rows)
     _write_csv(args.output_dir / "existing_policy_realized_outcomes.csv", existing_rows)
+    _write_csv(args.output_dir / "fixed_policy_comparison.csv", fixed_policy_rows)
     _write_csv(args.output_dir / "risk_score_quality.csv", quality_rows)
     _plot_tradeoff(
         args.output_dir / "risk_decision_tradeoff.png",
         existing_rows,
         mass_rows,
         loss_rows,
+        len(records),
     )
     _plot_reliability(
         args.output_dir / "unsafe_mass_reliability.png", reliability, len(records)
@@ -752,6 +853,7 @@ def main() -> None:
         mass_rows,
         loss_rows,
         quality_rows,
+        fixed_policy_rows,
     )
 
     print("Cohort integrity checks passed:")

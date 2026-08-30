@@ -126,7 +126,7 @@ def main():
     ]
 
     with open(args.output_csv, "w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=csv_fields)
+        writer = csv.DictWriter(handle, fieldnames=csv_fields, lineterminator="\n")
         writer.writeheader()
         for row in rows_sorted:
             writer.writerow({field: row[field] for field in csv_fields})

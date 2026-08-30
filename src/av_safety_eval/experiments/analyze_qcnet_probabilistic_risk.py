@@ -302,6 +302,17 @@ def compute_threshold_retention(
                 "probability_weighted_severity_retained_pct": (
                     100.0 * retained_severity / full_severity if full_severity > 0 else 100.0
                 ),
+                "total_expected_normalized_deficit_retained": (
+                    retained_severity / safety_threshold_m
+                ),
+                "full_distribution_expected_normalized_deficit": (
+                    full_severity / safety_threshold_m
+                ),
+                "expected_normalized_deficit_retained_pct": (
+                    100.0 * retained_severity / full_severity
+                    if full_severity > 0
+                    else 100.0
+                ),
             }
         )
 
@@ -379,7 +390,9 @@ def verify_reproduction(
     return counts
 
 
-def _public_row(record: Mapping[str, object]) -> Dict[str, object]:
+def _public_row(
+    record: Mapping[str, object], safety_threshold_m: float
+) -> Dict[str, object]:
     fields = (
         "scenario_id",
         "target_actor_id",
@@ -400,6 +413,9 @@ def _public_row(record: Mapping[str, object]) -> Dict[str, object]:
         "ground_truth_event",
     )
     row = {field: record[field] for field in fields}
+    row["expected_distance_deficit_risk"] = (
+        float(record["severity_weighted_risk"]) / safety_threshold_m
+    )
     row["mode_min_distances"] = json.dumps(
         [float(value) for value in np.asarray(record["mode_min_distances"], dtype=float)]
     )
@@ -409,7 +425,10 @@ def _public_row(record: Mapping[str, object]) -> Dict[str, object]:
 def _distribution(values: Sequence[float]) -> Dict[str, float]:
     array = np.asarray(values, dtype=float)
     if array.size == 0:
-        return {name: float("nan") for name in ("mean", "median", "p25", "p75", "p90", "p95")}
+        return {
+            name: float("nan")
+            for name in ("mean", "median", "p25", "p75", "p90", "p95", "p99")
+        }
     return {
         "mean": float(np.mean(array)),
         "median": float(np.median(array)),
@@ -417,6 +436,7 @@ def _distribution(values: Sequence[float]) -> Dict[str, float]:
         "p75": float(np.percentile(array, 75)),
         "p90": float(np.percentile(array, 90)),
         "p95": float(np.percentile(array, 95)),
+        "p99": float(np.percentile(array, 99)),
     }
 
 
@@ -440,9 +460,12 @@ def _write_summary(
     threshold_rows: Sequence[Mapping[str, object]],
     counts: Mapping[str, int],
     reproduction_profile: str | None,
+    safety_threshold_m: float,
 ) -> None:
     mass_values = [float(row["unsafe_probability_mass"]) for row in records]
-    severity_values = [float(row["severity_weighted_risk"]) for row in records]
+    expected_risk_values = [
+        float(row["severity_weighted_risk"]) / safety_threshold_m for row in records
+    ]
     risk_positive = sum(value > 0 for value in mass_values)
     top_rows = sorted(
         records,
@@ -495,10 +518,11 @@ def _write_summary(
         "",
         f"This report post-processes a {len(records)}-scenario QCNet/Argoverse 2 validation subset. "
         "For each predicted mode, the minimum center-to-center ego/target distance is computed over "
-        "jointly valid future timesteps using the 3.0 m screening threshold.",
+        f"jointly valid future timesteps using the {safety_threshold_m:.1f} m screening threshold.",
         "",
         "`unsafe_probability_mass` is the sum of QCNet mode weights whose minimum distance is below "
-        "3.0 m. `severity_weighted_risk` is the probability-weighted distance deficit below 3.0 m. "
+        f"{safety_threshold_m:.1f} m. `expected_distance_deficit_risk` is the probability-weighted "
+        "normalized threshold deficit. "
         "Both are risk proxies: QCNet probabilities are not safety-calibrated collision probabilities, "
         "and the deficit is not physical expected collision severity.",
         "",
@@ -509,21 +533,21 @@ def _write_summary(
 
     for heading, values in (
         ("Unsafe probability mass", mass_values),
-        ("Probability-weighted distance-deficit severity", severity_values),
+        ("Expected normalized distance-deficit risk", expected_risk_values),
     ):
         lines.extend(
             [
                 f"## {heading}",
                 "",
-                "| Population | Mean | Median | P25 | P75 | P90 | P95 |",
-                "|---|---:|---:|---:|---:|---:|---:|",
+                "| Population | Mean | Median | P25 | P75 | P90 | P95 | P99 |",
+                "|---|---:|---:|---:|---:|---:|---:|---:|",
             ]
         )
         for population, stats in _distribution_table(values):
             lines.append(
                 f"| {population} | {stats['mean']:.6f} | {stats['median']:.6f} | "
                 f"{stats['p25']:.6f} | {stats['p75']:.6f} | {stats['p90']:.6f} | "
-                f"{stats['p95']:.6f} |"
+                f"{stats['p95']:.6f} | {stats['p99']:.6f} |"
             )
         lines.append("")
 
@@ -534,7 +558,7 @@ def _write_summary(
             "When no mode reaches a probability threshold, the highest-probability mode is retained "
             "as the same top-1 fallback used by the existing probability-aware filter.",
             "",
-            "| Threshold | Triggered | Fallback | Mean modes | Mean retained mass | Unsafe mass retained | Severity retained |",
+            "| Threshold | Triggered | Fallback | Mean modes | Mean retained mass | Unsafe mass retained | Expected deficit retained |",
             "|---:|---:|---:|---:|---:|---:|---:|",
         ]
     )
@@ -544,15 +568,15 @@ def _write_summary(
             f"{int(row['fallback_scenarios'])} | {float(row['mean_eligible_modes']):.3f} | "
             f"{float(row['mean_retained_probability_mass']):.6f} | "
             f"{float(row['unsafe_probability_mass_retained_pct']):.2f}% | "
-            f"{float(row['probability_weighted_severity_retained_pct']):.2f}% |"
+            f"{float(row['expected_normalized_deficit_retained_pct']):.2f}% |"
         )
 
     lines.extend(
         [
             "",
-            "## Top 15 by probability-weighted severity",
+            "## Top 15 by expected normalized deficit",
             "",
-            "| Rank | Scenario | Unsafe modes | Unsafe mass | Severity proxy | Top-1 min (m) | Worst min (m) | GT min (m) |",
+            "| Rank | Scenario | Unsafe modes | Unsafe mass | Expected deficit | Top-1 min (m) | Worst min (m) | GT min (m) |",
             "|---:|---|---:|---:|---:|---:|---:|---:|",
         ]
     )
@@ -560,7 +584,7 @@ def _write_summary(
         lines.append(
             f"| {rank} | `{row['scenario_id']}` | {int(row['unsafe_mode_count'])} | "
             f"{_format_float(row['unsafe_probability_mass'])} | "
-            f"{_format_float(row['severity_weighted_risk'])} | "
+            f"{float(row['severity_weighted_risk']) / safety_threshold_m:.6f} | "
             f"{float(row['top1_min_distance']):.3f} | "
             f"{float(row['worst_case_min_distance']):.3f} | "
             f"{float(row['ground_truth_min_distance']):.3f} |"
@@ -607,18 +631,28 @@ def _write_summary(
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
-def _plot_scatter(path: Path, records: Sequence[Mapping[str, object]]) -> None:
+def _plot_scatter(
+    path: Path,
+    records: Sequence[Mapping[str, object]],
+    safety_threshold_m: float,
+) -> None:
     mass = np.asarray([row["unsafe_probability_mass"] for row in records], dtype=float)
-    severity = np.asarray([row["severity_weighted_risk"] for row in records], dtype=float)
+    expected_risk = np.asarray(
+        [row["severity_weighted_risk"] for row in records], dtype=float
+    ) / safety_threshold_m
     by_id = {str(row["scenario_id"]): row for row in records}
 
     fig, ax = plt.subplots(figsize=(8.2, 5.4))
-    ax.scatter(mass, severity, s=25, alpha=0.65, color="#176B87", edgecolors="none")
+    ax.scatter(mass, expected_risk, s=12, alpha=0.28, color="#176B87", edgecolors="none")
     label_offsets = {"001749": (12, 18), "00e2cd": (10, 12), "032618": (12, -20)}
+    annotated_ids = set()
     for label in ("001749", "00e2cd", "032618"):
-        row = by_id[str(KEY_SCENARIOS[label]["scenario_id"])]
+        scenario_id = str(KEY_SCENARIOS[label]["scenario_id"])
+        if scenario_id not in by_id:
+            continue
+        row = by_id[scenario_id]
         x = float(row["unsafe_probability_mass"])
-        y = float(row["severity_weighted_risk"])
+        y = float(row["severity_weighted_risk"]) / safety_threshold_m
         ax.scatter([x], [y], s=54, color="#C73E1D", zorder=3)
         ax.annotate(
             label,
@@ -628,9 +662,28 @@ def _plot_scatter(path: Path, records: Sequence[Mapping[str, object]]) -> None:
             fontsize=9,
             arrowprops={"arrowstyle": "-", "color": "#555555", "linewidth": 0.7},
         )
+        annotated_ids.add(scenario_id)
+    if not annotated_ids:
+        outliers = sorted(
+            records,
+            key=lambda row: (-float(row["severity_weighted_risk"]), str(row["scenario_id"])),
+        )[:3]
+        for index, row in enumerate(outliers):
+            x = float(row["unsafe_probability_mass"])
+            y = float(row["severity_weighted_risk"]) / safety_threshold_m
+            label = str(row["scenario_id"])[:8]
+            ax.scatter([x], [y], s=48, color="#C73E1D", zorder=3)
+            ax.annotate(
+                label,
+                (x, y),
+                xytext=(10, 10 + 12 * index),
+                textcoords="offset points",
+                fontsize=8,
+                arrowprops={"arrowstyle": "-", "color": "#555555", "linewidth": 0.7},
+            )
     ax.set_xlabel("Unsafe probability mass (risk proxy)")
-    ax.set_ylabel("Probability-weighted distance deficit (m)")
-    ax.set_title("QCNet probabilistic-risk proxies across 500 AV2 scenarios")
+    ax.set_ylabel("Expected normalized distance-deficit risk")
+    ax.set_title(f"QCNet probabilistic-risk proxies across {len(records)} AV2 scenarios")
     ax.grid(True, alpha=0.25)
     fig.tight_layout()
     fig.savefig(path, dpi=180)
@@ -641,11 +694,17 @@ def _plot_threshold_retention(path: Path, rows: Sequence[Mapping[str, object]]) 
     thresholds = [float(row["probability_threshold"]) for row in rows]
     positions = np.arange(len(thresholds))
     unsafe = [float(row["unsafe_probability_mass_retained_pct"]) for row in rows]
-    severity = [float(row["probability_weighted_severity_retained_pct"]) for row in rows]
+    expected_risk = [float(row["expected_normalized_deficit_retained_pct"]) for row in rows]
 
     fig, ax = plt.subplots(figsize=(8.2, 5.2))
     ax.plot(positions, unsafe, marker="o", linewidth=2, label="Unsafe probability mass")
-    ax.plot(positions, severity, marker="s", linewidth=2, label="Weighted distance deficit")
+    ax.plot(
+        positions,
+        expected_risk,
+        marker="s",
+        linewidth=2,
+        label="Expected normalized deficit",
+    )
     ax.set_xlabel("Minimum retained QCNet mode probability")
     ax.set_ylabel("Full-distribution proxy retained (%)")
     ax.set_title("Risk-proxy retention under probability filtering")
@@ -734,7 +793,10 @@ def main() -> None:
     scatter_path = args.output_dir / "probabilistic_risk_scatter.png"
     retention_path = args.output_dir / "probabilistic_risk_threshold_retention.png"
 
-    public_rows = [_public_row(row) for row in sorted(records, key=lambda row: str(row["scenario_id"]))]
+    public_rows = [
+        _public_row(row, args.safety_threshold_m)
+        for row in sorted(records, key=lambda row: str(row["scenario_id"]))
+    ]
     _write_csv(per_scenario_path, public_rows)
     _write_csv(threshold_path, threshold_rows)
     _write_summary(
@@ -743,8 +805,9 @@ def main() -> None:
         threshold_rows,
         counts,
         args.reproduction_profile,
+        args.safety_threshold_m,
     )
-    _plot_scatter(scatter_path, records)
+    _plot_scatter(scatter_path, records, args.safety_threshold_m)
     _plot_threshold_retention(retention_path, threshold_rows)
 
     print("Cohort integrity checks passed:")

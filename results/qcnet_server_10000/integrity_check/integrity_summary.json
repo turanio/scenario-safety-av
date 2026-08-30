@@ -1,0 +1,15 @@
+{
+  "expected_count": 10000,
+  "manifest_count": 10000,
+  "unique_manifest_ids": 10000,
+  "artifact_count": 10000,
+  "unique_artifact_ids": 10000,
+  "export_summary_count": 10000,
+  "historical_manifest_count": 500,
+  "historical_overlap_count": 0,
+  "six_mode_artifact_count": 10000,
+  "sixty_step_artifact_count": 10000,
+  "valid_joint_horizon_count": 10000,
+  "failed_integrity_rows": 0,
+  "overall_status": "pass"
+}

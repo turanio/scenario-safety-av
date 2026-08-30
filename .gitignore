@@ -26,6 +26,8 @@ results/logs/*
 results/qcnet_batch/artifacts/*.npz
 results/qcnet_batch/artifacts/batch_export_summary.csv
 results/qcnet_smoke/*.npz
+results/qcnet_server_10000/artifacts/
+results/qcnet_server_10000/runpod_logs/
 results/qcnet_smoke/*.json
 !results/qcnet_smoke/qcnet_real_scenario_evaluation.json
 !results/**/.gitkeep

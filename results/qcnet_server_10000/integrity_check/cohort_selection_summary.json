@@ -1,0 +1,10 @@
+{
+  "total_available_ids": 24988,
+  "historical_manifest_ids": 500,
+  "historical_ids_present_in_available": 500,
+  "remaining_candidate_ids": 24488,
+  "random_seed": 42,
+  "selected_count": 10000,
+  "unique_selected_count": 10000,
+  "historical_overlap_count": 0
+}

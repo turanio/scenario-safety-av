@@ -1,0 +1,5 @@
+policy_family,policy_name,policy_parameter,parameter_value,total_scenarios,realized_positive_events,total_interventions,intervention_rate,true_positives,false_positives,extra_interventions,false_negatives,true_negatives,realized_event_recall,realized_event_precision,false_positive_rate,f1
+baseline,top1,,,10000,159,225,0.0225,119,106,106,40,9735,0.7484276729559748,0.5288888888888889,0.010771263083020018,0.6197916666666666
+baseline,worst_case,,,10000,159,558,0.0558,141,417,417,18,9424,0.8867924528301887,0.25268817204301075,0.0423737425058429,0.39330543933054396
+probability_filter,probability_aware_theta_0.05,theta,0.05,10000,159,374,0.0374,137,237,237,22,9604,0.8616352201257862,0.3663101604278075,0.02408291840260136,0.5140712945590995
+risk_score,risk_mass,rho,0.1,10000,159,341,0.0341,133,208,208,26,9633,0.8364779874213837,0.39002932551319647,0.021136063408190225,0.532

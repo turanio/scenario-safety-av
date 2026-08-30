@@ -1,0 +1,10 @@
+record_type,score_name,metric,value,bin_lower,bin_upper,scenario_count,mean_score,observed_event_rate,notes
+score_metric,recorded_av2_future_reference,prevalence,0.0159,,,10000,,,Recorded AV2 future point-distance threshold-event prevalence.
+score_metric,unsafe_probability_mass,brier_score,0.011464762849327174,,,10000,,,Exploratory; QCNet mode weights are not safety-calibrated probabilities.
+score_metric,unsafe_probability_mass,auroc,0.9369746261149765,,,10000,,,Exploratory ranking metric with few realized positive events.
+score_metric,unsafe_probability_mass,auprc,0.6352973338506027,,,10000,,,Non-interpolated average precision; exploratory for this cohort.
+score_metric,expected_distance_deficit_risk,auroc,0.9307428362536659,,,10000,,,Exploratory ranking metric; this score is not a probability.
+score_metric,expected_distance_deficit_risk,auprc,0.33356541270570444,,,10000,,,Non-interpolated average precision; exploratory for this cohort.
+reliability_bin,unsafe_probability_mass,observed_realized_event_frequency,,0.0,0.0,9442,0.0,0.0019063757678457953,Adaptive tie-preserving bin; no recalibration was fitted.
+reliability_bin,unsafe_probability_mass,observed_realized_event_frequency,,6.134987273753723e-08,0.07721418142318726,200,0.017580964844573613,0.03,Adaptive tie-preserving bin; no recalibration was fitted.
+reliability_bin,unsafe_probability_mass,observed_realized_event_frequency,,0.07769598066806793,1.0000000884756446,358,0.6563569701347403,0.3770949720670391,Adaptive tie-preserving bin; no recalibration was fitted.

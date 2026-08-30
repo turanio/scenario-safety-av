@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from av_safety_eval.experiments.analyze_qcnet_risk_aware_decisions import (
+    adaptive_reliability_rows,
     binary_auprc,
     binary_auroc,
     build_decision_thresholds,
@@ -9,6 +10,7 @@ from av_safety_eval.experiments.analyze_qcnet_risk_aware_decisions import (
     expected_distance_deficit_risk,
     probability_filter_decisions,
     reliability_rows,
+    sweep_score_policy,
 )
 
 
@@ -84,3 +86,30 @@ def test_reliability_bins_preserve_total_count() -> None:
     assert sum(int(row["scenario_count"]) for row in rows) == 3
     assert rows[0]["observed_event_rate"] == pytest.approx(0.5)
     assert rows[1]["observed_event_rate"] == pytest.approx(1.0)
+
+
+def test_adaptive_reliability_bins_preserve_ties_and_minimum_counts() -> None:
+    scores = [0.0] * 8 + [0.1] * 3 + [0.2] * 3 + [0.9] * 4
+    labels = [False] * 15 + [True] * 3
+
+    rows = adaptive_reliability_rows(
+        labels, scores, min_bin_count=4, max_bins=4
+    )
+
+    assert sum(int(row["scenario_count"]) for row in rows) == len(scores)
+    assert rows[0]["bin_lower"] == rows[0]["bin_upper"] == 0.0
+    assert all(int(row["scenario_count"]) >= 4 for row in rows)
+
+
+def test_direct_risk_policy_thresholds_are_inclusive() -> None:
+    rows = sweep_score_policy(
+        scores=[0.0, 0.1, 0.2],
+        realized_events=[False, True, True],
+        thresholds=[0.1],
+        family="risk_score",
+        name="risk_mass",
+        parameter="rho",
+    )
+
+    assert rows[0]["total_interventions"] == 2
+    assert rows[0]["true_positives"] == 2
