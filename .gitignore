@@ -28,6 +28,7 @@ results/qcnet_batch/artifacts/batch_export_summary.csv
 results/qcnet_smoke/*.npz
 results/qcnet_server_10000/artifacts/
 results/qcnet_server_10000/runpod_logs/
+results/qcnet_server_10000/artifacts.sha256
 results/qcnet_smoke/*.json
 !results/qcnet_smoke/qcnet_real_scenario_evaluation.json
 !results/**/.gitkeep
@@ -47,6 +48,7 @@ notes/
 results/qcnet_server_smoke/artifacts/*.npz
 results/qcnet_server_50/artifacts/*.npz
 results/qcnet_server_500/artifacts/*.npz
+results/qcnet_server_500/artifacts.sha256
 
 # QCNet batch artifact summaries inside generated artifact folders
 results/qcnet_server_smoke/artifacts/batch_export_summary.csv
@@ -55,3 +57,9 @@ results/qcnet_server_500/artifacts/batch_export_summary.csv
 
 # Local QCNet server smoke-test output
 results/qcnet_server_smoke/
+
+# Final report details
+final_report/
+
+# Runpod logs
+runpod_logs/
