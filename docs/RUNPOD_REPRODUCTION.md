@@ -140,8 +140,22 @@ PYTHONPATH=src MPLCONFIGDIR=/workspace/cache/matplotlib \
   --artifact-dir results/qcnet_server_500/artifacts \
   --selected-scenario-ids results/qcnet_server_500/selected_scenario_ids.txt \
   --output-dir results/qcnet_server_500/probabilistic_risk \
+  --reproduction-profile historical_500 \
+  --safety-threshold-m 3.0
+
+PYTHONPATH=src MPLCONFIGDIR=/workspace/cache/matplotlib \
+/workspace/envs/qcnet/bin/python \
+  src/av_safety_eval/experiments/analyze_qcnet_risk_aware_decisions.py \
+  --artifact-dir results/qcnet_server_500/artifacts \
+  --selected-scenario-ids results/qcnet_server_500/selected_scenario_ids.txt \
+  --output-dir results/qcnet_server_500/risk_aware_decision \
+  --reproduction-profile historical_500 \
   --safety-threshold-m 3.0
 ```
+
+For a later larger manifest-backed cohort, omit `--reproduction-profile`; the
+general artifact/manifest, ID, six-mode, probability, and valid-horizon checks
+still run, without applying the historical 500-scenario event fingerprint.
 
 ## Mandatory reproduction result
 

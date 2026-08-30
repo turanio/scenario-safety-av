@@ -1,0 +1,16 @@
+record_type,score_name,metric,value,bin_lower,bin_upper,scenario_count,mean_score,observed_event_rate,notes
+score_metric,unsafe_probability_mass,brier_score,0.015196641915044183,,,500,,,Exploratory; QCNet mode weights are not safety-calibrated probabilities.
+score_metric,unsafe_probability_mass,auroc,0.9258130081300813,,,500,,,Exploratory ranking metric with few realized positive events.
+score_metric,unsafe_probability_mass,auprc,0.5168478835978836,,,500,,,Non-interpolated average precision; exploratory for this cohort.
+score_metric,expected_distance_deficit_risk,auroc,0.9171747967479674,,,500,,,Exploratory ranking metric; this score is not a probability.
+score_metric,expected_distance_deficit_risk,auprc,0.26826264208501044,,,500,,,Non-interpolated average precision; exploratory for this cohort.
+reliability_bin,unsafe_probability_mass,observed_realized_event_frequency,,0.0,0.1,482,0.0005139655776487892,0.004149377593360996,Fixed-width bin; empty bins are retained explicitly.
+reliability_bin,unsafe_probability_mass,observed_realized_event_frequency,,0.1,0.2,4,0.13122956978622824,0.0,Fixed-width bin; empty bins are retained explicitly.
+reliability_bin,unsafe_probability_mass,observed_realized_event_frequency,,0.2,0.30000000000000004,0,,,Fixed-width bin; empty bins are retained explicitly.
+reliability_bin,unsafe_probability_mass,observed_realized_event_frequency,,0.30000000000000004,0.4,0,,,Fixed-width bin; empty bins are retained explicitly.
+reliability_bin,unsafe_probability_mass,observed_realized_event_frequency,,0.4,0.5,2,0.42768505483400077,0.5,Fixed-width bin; empty bins are retained explicitly.
+reliability_bin,unsafe_probability_mass,observed_realized_event_frequency,,0.5,0.6000000000000001,1,0.546128336340189,0.0,Fixed-width bin; empty bins are retained explicitly.
+reliability_bin,unsafe_probability_mass,observed_realized_event_frequency,,0.6000000000000001,0.7000000000000001,0,,,Fixed-width bin; empty bins are retained explicitly.
+reliability_bin,unsafe_probability_mass,observed_realized_event_frequency,,0.7000000000000001,0.8,2,0.7080640010535717,0.0,Fixed-width bin; empty bins are retained explicitly.
+reliability_bin,unsafe_probability_mass,observed_realized_event_frequency,,0.8,0.9,1,0.854192465543747,0.0,Fixed-width bin; empty bins are retained explicitly.
+reliability_bin,unsafe_probability_mass,observed_realized_event_frequency,,0.9,1.0,4,0.992007385197212,0.5,Fixed-width bin; empty bins are retained explicitly.

@@ -29,6 +29,7 @@ EXPECTED_COUNTS = {
     "ground_truth_events": 8,
     "hidden_risk_cases": 18,
 }
+REPRODUCTION_PROFILES = ("historical_500",)
 EXPECTED_SWEEP = {
     0.000: (31, 18, 0, 6.000, 0),
     0.001: (29, 16, 2, 5.462, 0),
@@ -137,6 +138,8 @@ def analyze_artifact(path: Path, safety_threshold_m: float = 3.0) -> Dict[str, o
             "scenario_id": _as_text(data["scenario_id"]),
             "target_actor_id": _as_text(data["target_actor_id"]),
             "num_modes": int(positions.shape[0]),
+            "future_horizon": int(horizon),
+            "joint_valid_timestep_count": int(joint_mask.sum()),
             "top1_mode": top1_mode,
             "top1_probability": float(probabilities[top1_mode]),
             "top1_min_distance": top1_min_distance,
@@ -154,6 +157,83 @@ def analyze_artifact(path: Path, safety_threshold_m: float = 3.0) -> Dict[str, o
             "mode_min_distances": mode_min_distances,
             "probabilities": probabilities,
         }
+
+
+def cohort_event_counts(records: Sequence[Mapping[str, object]]) -> Dict[str, int]:
+    """Return the threshold-event counts shared by general and historical runs."""
+    return {
+        "total_scenarios": len(records),
+        "worst_case_events": sum(bool(row["worst_case_event"]) for row in records),
+        "top1_events": sum(bool(row["top1_event"]) for row in records),
+        "ground_truth_events": sum(bool(row["ground_truth_event"]) for row in records),
+        "hidden_risk_cases": sum(
+            bool(row["worst_case_event"]) and not bool(row["top1_event"])
+            for row in records
+        ),
+    }
+
+
+def verify_cohort_integrity(
+    records: Sequence[Mapping[str, object]],
+    selected_scenario_ids: Sequence[str],
+    expected_num_modes: int = 6,
+    probability_sum_tolerance: float = 1e-4,
+) -> Dict[str, int]:
+    """Validate a manifest-backed artifact cohort without historical count assumptions."""
+    if not records:
+        raise RuntimeError("Artifact cohort is empty")
+
+    artifact_ids = [str(row["scenario_id"]) for row in records]
+    manifest_ids = [str(scenario_id) for scenario_id in selected_scenario_ids]
+    if len(set(artifact_ids)) != len(artifact_ids):
+        raise RuntimeError("Artifact scenario IDs must be unique")
+    if len(set(manifest_ids)) != len(manifest_ids):
+        raise RuntimeError("Selected scenario manifest IDs must be unique")
+    if len(artifact_ids) != len(manifest_ids):
+        raise RuntimeError(
+            "Artifact/manifest count mismatch: "
+            f"artifacts={len(artifact_ids)}, manifest={len(manifest_ids)}"
+        )
+    if set(artifact_ids) != set(manifest_ids):
+        missing = sorted(set(manifest_ids) - set(artifact_ids))[:5]
+        extra = sorted(set(artifact_ids) - set(manifest_ids))[:5]
+        raise RuntimeError(f"Artifact/manifest ID mismatch: missing={missing}, extra={extra}")
+
+    for row in records:
+        scenario_id = str(row["scenario_id"])
+        num_modes = int(row["num_modes"])
+        if num_modes != expected_num_modes:
+            raise RuntimeError(
+                f"Scenario {scenario_id} has {num_modes} modes; expected {expected_num_modes}"
+            )
+        probabilities = np.asarray(row["probabilities"], dtype=float)
+        if probabilities.shape != (expected_num_modes,):
+            raise RuntimeError(
+                f"Scenario {scenario_id} has invalid probability shape {probabilities.shape}"
+            )
+        if not np.isfinite(probabilities).all() or np.any(probabilities < 0):
+            raise RuntimeError(f"Scenario {scenario_id} has invalid probabilities")
+        if not np.isclose(
+            probabilities.sum(), 1.0, atol=probability_sum_tolerance, rtol=0.0
+        ):
+            raise RuntimeError(
+                f"Scenario {scenario_id} probabilities sum to {probabilities.sum():.9f}, not 1"
+            )
+        if int(row["future_horizon"]) <= 0 or int(row["joint_valid_timestep_count"]) <= 0:
+            raise RuntimeError(f"Scenario {scenario_id} has no valid joint future horizon")
+        distances = np.asarray(row["mode_min_distances"], dtype=float)
+        if distances.shape != (expected_num_modes,) or not np.isfinite(distances).all():
+            raise RuntimeError(f"Scenario {scenario_id} has invalid mode-distance values")
+        if not np.isfinite(float(row["ground_truth_min_distance"])):
+            raise RuntimeError(f"Scenario {scenario_id} has invalid ground-truth distance")
+
+    return {
+        "artifact_count": len(records),
+        "manifest_count": len(manifest_ids),
+        "unique_artifact_ids": len(set(artifact_ids)),
+        "unique_manifest_ids": len(set(manifest_ids)),
+        "expected_num_modes": expected_num_modes,
+    }
 
 
 def compute_threshold_retention(
@@ -236,16 +316,7 @@ def verify_reproduction(
     probability_tolerance: float = 1e-5,
 ) -> Dict[str, int]:
     """Fail fast unless the recreated artifacts match the validated experiment."""
-    counts = {
-        "total_scenarios": len(records),
-        "worst_case_events": sum(bool(row["worst_case_event"]) for row in records),
-        "top1_events": sum(bool(row["top1_event"]) for row in records),
-        "ground_truth_events": sum(bool(row["ground_truth_event"]) for row in records),
-        "hidden_risk_cases": sum(
-            bool(row["worst_case_event"]) and not bool(row["top1_event"])
-            for row in records
-        ),
-    }
+    counts = cohort_event_counts(records)
     if counts != EXPECTED_COUNTS:
         raise RuntimeError(f"Reproduction count mismatch: expected {EXPECTED_COUNTS}, got {counts}")
 
@@ -349,9 +420,14 @@ def _distribution(values: Sequence[float]) -> Dict[str, float]:
     }
 
 
-def _distribution_table(all_values: Sequence[float]) -> List[Tuple[str, Dict[str, float]]]:
+def _distribution_table(
+    all_values: Sequence[float],
+) -> List[Tuple[str, Dict[str, float]]]:
     positive = [value for value in all_values if value > 0]
-    return [("All 500 scenarios", _distribution(all_values)), ("Risk-positive only", _distribution(positive))]
+    return [
+        (f"All {len(all_values)} scenarios", _distribution(all_values)),
+        ("Risk-positive only", _distribution(positive)),
+    ]
 
 
 def _format_float(value: object, digits: int = 6) -> str:
@@ -363,6 +439,7 @@ def _write_summary(
     records: Sequence[Mapping[str, object]],
     threshold_rows: Sequence[Mapping[str, object]],
     counts: Mapping[str, int],
+    reproduction_profile: str | None,
 ) -> None:
     mass_values = [float(row["unsafe_probability_mass"]) for row in records]
     severity_values = [float(row["severity_weighted_risk"]) for row in records]
@@ -377,12 +454,46 @@ def _write_summary(
     )[:15]
     by_id = {str(row["scenario_id"]): row for row in records}
 
+    if reproduction_profile == "historical_500":
+        validation_lines = [
+            "## Reproduction sanity checks",
+            "",
+            "All general integrity checks and historical mandatory checks passed before "
+            "these Stage C outputs were written.",
+            "",
+            "| Check | Reproduced | Required |",
+            "|---|---:|---:|",
+            f"| Scenarios | {counts['total_scenarios']} | 500 |",
+            f"| Worst-case threshold events | {counts['worst_case_events']} | 31 |",
+            f"| Top-1 threshold events | {counts['top1_events']} | 13 |",
+            f"| Recorded-ground-truth threshold events | {counts['ground_truth_events']} | 8 |",
+            f"| Hidden-risk cases | {counts['hidden_risk_cases']} | 18 |",
+            "",
+        ]
+    else:
+        validation_lines = [
+            "## Cohort integrity checks",
+            "",
+            "Manifest/artifact counts and IDs, six-mode structure, probabilities, and jointly "
+            "valid future horizons passed validation. No historical event-count fingerprint "
+            "was requested for this cohort.",
+            "",
+            "| Check | Observed |",
+            "|---|---:|",
+            f"| Scenarios | {counts['total_scenarios']} |",
+            f"| Worst-case threshold events | {counts['worst_case_events']} |",
+            f"| Top-1 threshold events | {counts['top1_events']} |",
+            f"| Recorded-ground-truth threshold events | {counts['ground_truth_events']} |",
+            f"| Hidden-risk cases | {counts['hidden_risk_cases']} |",
+            "",
+        ]
+
     lines = [
         "# QCNet Probabilistic-Risk Proxy Analysis",
         "",
         "## Scope and definitions",
         "",
-        "This report post-processes the reproduced 500-scenario QCNet/Argoverse 2 validation subset. "
+        f"This report post-processes a {len(records)}-scenario QCNet/Argoverse 2 validation subset. "
         "For each predicted mode, the minimum center-to-center ego/target distance is computed over "
         "jointly valid future timesteps using the 3.0 m screening threshold.",
         "",
@@ -391,18 +502,7 @@ def _write_summary(
         "Both are risk proxies: QCNet probabilities are not safety-calibrated collision probabilities, "
         "and the deficit is not physical expected collision severity.",
         "",
-        "## Reproduction sanity checks",
-        "",
-        "All mandatory checks passed before these Stage C outputs were written.",
-        "",
-        "| Check | Reproduced | Required |",
-        "|---|---:|---:|",
-        f"| Scenarios | {counts['total_scenarios']} | 500 |",
-        f"| Worst-case threshold events | {counts['worst_case_events']} | 31 |",
-        f"| Top-1 threshold events | {counts['top1_events']} | 13 |",
-        f"| Recorded-ground-truth threshold events | {counts['ground_truth_events']} | 8 |",
-        f"| Hidden-risk cases | {counts['hidden_risk_cases']} | 18 |",
-        "",
+        *validation_lines,
         f"Risk-positive scenarios: **{risk_positive} / {len(records)}**.",
         "",
     ]
@@ -476,7 +576,10 @@ def _write_summary(
         ]
     )
     for label in ("001749", "00e2cd", "032618"):
-        row = by_id[str(KEY_SCENARIOS[label]["scenario_id"])]
+        scenario_id = str(KEY_SCENARIOS[label]["scenario_id"])
+        if scenario_id not in by_id:
+            continue
+        row = by_id[scenario_id]
         lines.append(
             f"| `{label}` | {_format_float(row['top1_probability'])} | "
             f"{_format_float(row['worst_case_probability'], 9)} | "
@@ -575,6 +678,15 @@ def main() -> None:
         type=Path,
     )
     parser.add_argument(
+        "--reproduction-profile",
+        choices=REPRODUCTION_PROFILES,
+        default=None,
+        help=(
+            "Apply an exact historical fingerprint after general cohort integrity "
+            "checks. Omit for arbitrary manifest-backed cohorts."
+        ),
+    )
+    parser.add_argument(
         "--selected-scenario-ids",
         default="results/qcnet_server_500/selected_scenario_ids.txt",
         type=Path,
@@ -610,7 +722,10 @@ def main() -> None:
         for line in args.selected_scenario_ids.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    counts = verify_reproduction(records, threshold_rows, selected_ids)
+    integrity = verify_cohort_integrity(records, selected_ids)
+    counts = cohort_event_counts(records)
+    if args.reproduction_profile == "historical_500":
+        counts = verify_reproduction(records, threshold_rows, selected_ids)
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     per_scenario_path = args.output_dir / "probabilistic_risk_per_scenario.csv"
@@ -622,11 +737,23 @@ def main() -> None:
     public_rows = [_public_row(row) for row in sorted(records, key=lambda row: str(row["scenario_id"]))]
     _write_csv(per_scenario_path, public_rows)
     _write_csv(threshold_path, threshold_rows)
-    _write_summary(summary_path, records, threshold_rows, counts)
+    _write_summary(
+        summary_path,
+        records,
+        threshold_rows,
+        counts,
+        args.reproduction_profile,
+    )
     _plot_scatter(scatter_path, records)
     _plot_threshold_retention(retention_path, threshold_rows)
 
-    print("Mandatory reproduction checks passed exactly:")
+    print("Cohort integrity checks passed:")
+    for key, value in integrity.items():
+        print(f"  {key}: {value}")
+    if args.reproduction_profile == "historical_500":
+        print("Historical 500 reproduction checks passed exactly:")
+    else:
+        print("No historical reproduction profile requested; observed event counts:")
     for key, value in counts.items():
         print(f"  {key}: {value}")
     print(f"Analyzed {len(records)} artifacts")

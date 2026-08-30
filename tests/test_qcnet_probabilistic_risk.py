@@ -6,6 +6,7 @@ import pytest
 from av_safety_eval.experiments.analyze_qcnet_probabilistic_risk import (
     analyze_artifact,
     compute_threshold_retention,
+    verify_cohort_integrity,
     verify_reproduction,
 )
 
@@ -89,3 +90,49 @@ def test_reproduction_gate_rejects_incomplete_batch(tmp_path: Path) -> None:
 
     with pytest.raises(RuntimeError, match="Reproduction count mismatch"):
         verify_reproduction([row], thresholds, ["synthetic-scenario"])
+
+
+def test_general_cohort_integrity_accepts_manifest_backed_batch(tmp_path: Path) -> None:
+    artifact = tmp_path / "scenario.npz"
+    _write_artifact(artifact)
+    row = analyze_artifact(artifact)
+
+    result = verify_cohort_integrity(
+        [row], ["synthetic-scenario"], expected_num_modes=2
+    )
+
+    assert result["artifact_count"] == 1
+    assert result["manifest_count"] == 1
+    assert result["expected_num_modes"] == 2
+
+
+def test_general_cohort_integrity_requires_six_modes_by_default(tmp_path: Path) -> None:
+    artifact = tmp_path / "scenario.npz"
+    _write_artifact(artifact)
+    row = analyze_artifact(artifact)
+
+    with pytest.raises(RuntimeError, match="has 2 modes; expected 6"):
+        verify_cohort_integrity([row], ["synthetic-scenario"])
+
+
+def test_general_cohort_integrity_rejects_duplicate_manifest_ids(tmp_path: Path) -> None:
+    artifact = tmp_path / "scenario.npz"
+    _write_artifact(artifact)
+    row = analyze_artifact(artifact)
+
+    with pytest.raises(RuntimeError, match="manifest IDs must be unique"):
+        verify_cohort_integrity(
+            [row], ["synthetic-scenario", "synthetic-scenario"], expected_num_modes=2
+        )
+
+
+def test_general_cohort_integrity_rejects_invalid_probability_sum(tmp_path: Path) -> None:
+    artifact = tmp_path / "scenario.npz"
+    _write_artifact(artifact)
+    row = analyze_artifact(artifact)
+    row["probabilities"] = np.asarray([0.8, 0.1])
+
+    with pytest.raises(RuntimeError, match="probabilities sum"):
+        verify_cohort_integrity(
+            [row], ["synthetic-scenario"], expected_num_modes=2
+        )
